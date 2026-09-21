@@ -92,3 +92,7 @@ export const CompleteDeliverySchema = z
   })
   .optional()
   .default({});
+
+  export const AttachDeliveryProofSchema = z.object({
+  comment: z.string().optional(),
+}).optional().default({});

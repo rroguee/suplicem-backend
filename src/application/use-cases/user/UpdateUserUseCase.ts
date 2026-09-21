@@ -1,13 +1,52 @@
 import { User } from "../../../domain/entities/User";
 import { UserRepository } from "../../../domain/repositories/UserRepository";
+import { ApplicationActor } from "../../dtos/UserDtos";
 
 export class UpdateUserUseCase {
   constructor(private userRepo: UserRepository) {}
 
-  async execute(user: User): Promise<void> {
-    if (!user) {
+  async execute(
+    userToUpdate: Partial<User> & { uid: string },
+    requester: ApplicationActor
+  ): Promise<void> {
+    if (!userToUpdate || !userToUpdate.uid) {
+      throw new Error("UID de usuario requerido");
+    }
+
+    if (!requester) {
+      throw new Error("Usuario no autenticado");
+    }
+
+    const isAuthorizedAdmin = requester.userType === "admin" && requester.status === "active";
+    const isOwner = requester.uid === userToUpdate.uid;
+
+    if (!isAuthorizedAdmin && !isOwner) {
+      throw new Error("No tienes permiso para actualizar este usuario");
+    }
+
+    const existingUser = await this.userRepo.getById(userToUpdate.uid);
+    if (!existingUser) {
       throw new Error("Usuario no encontrado");
     }
-    await this.userRepo.update(user.uid, user);
+
+    // Aplicar únicamente campos editables de perfil (Whitelist segura)
+    const sanitizedUpdate: Partial<User> = {};
+    if (userToUpdate.names !== undefined) sanitizedUpdate.names = userToUpdate.names;
+    if (userToUpdate.lastNames !== undefined) sanitizedUpdate.lastNames = userToUpdate.lastNames;
+    if (userToUpdate.phone !== undefined) sanitizedUpdate.phone = userToUpdate.phone;
+    if (userToUpdate.addresses !== undefined) sanitizedUpdate.addresses = userToUpdate.addresses;
+    if (userToUpdate.vehicle !== undefined) sanitizedUpdate.vehicle = userToUpdate.vehicle;
+    if (userToUpdate.identificationImage !== undefined) {
+      sanitizedUpdate.identificationImage = userToUpdate.identificationImage;
+    }
+
+    await this.userRepo.update(userToUpdate.uid, {
+      ...existingUser,
+      ...sanitizedUpdate,
+      uid: existingUser.uid, // Inmutable
+      email: existingUser.email, // Inmutable
+      userType: existingUser.userType, // Inmutable vía perfil
+      status: existingUser.status, // Inmutable vía perfil
+    });
   }
 }

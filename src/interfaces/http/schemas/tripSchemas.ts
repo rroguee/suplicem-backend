@@ -16,3 +16,12 @@ export const UpdateTripStatusSchema = z.object({
     }
   ),
 });
+
+export const CreateTripWithOrdersSchema = z.object({
+  tripNumber: z.string().min(1, "tripNumber es requerido"),
+  orderIds: z.array(z.string().min(1)).min(1, "Debe incluir al menos una orden"),
+  totalTons: z.number().positive("totalTons debe ser mayor a 0"),
+  driverId: z.string().optional(),
+  comments: z.string().optional(),
+});
+export const AcceptTripSchema = z.object({}).passthrough().optional().default({});

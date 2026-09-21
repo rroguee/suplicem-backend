@@ -3,18 +3,29 @@ import { ProductFirestoreRepository } from "../../../infrastructure/firestore/Pr
 import { CreateProductUseCase } from "../../../application/use-cases/product/CreateProductUseCase";
 import { GetAllProductsUseCase } from "../../../application/use-cases/product/GetAllProductsUseCase";
 import { SearchProductsUseCase } from "../../../application/use-cases/product/SearchProductsUseCase";
+import { UpdateProductUseCase } from "../../../application/use-cases/product/UpdateProductUseCase";
+import { DeleteProductUseCase } from "../../../application/use-cases/product/DeleteProductUseCase";
 
-const productRepo = new ProductFirestoreRepository();
-const createProductUseCase = new CreateProductUseCase(productRepo);
-const getAllProductsUseCase = new GetAllProductsUseCase(productRepo);
-const searchProductsUseCase = new SearchProductsUseCase(productRepo);
+const defaultRepo = new ProductFirestoreRepository();
+const defaultCreateUseCase = new CreateProductUseCase(defaultRepo);
+const defaultGetAllUseCase = new GetAllProductsUseCase(defaultRepo);
+const defaultSearchUseCase = new SearchProductsUseCase(defaultRepo);
+const defaultUpdateUseCase = new UpdateProductUseCase(defaultRepo);
+const defaultDeleteUseCase = new DeleteProductUseCase(defaultRepo);
 
 export class ProductController {
+  constructor(
+    private createProductUseCase: CreateProductUseCase = defaultCreateUseCase,
+    private getAllProductsUseCase: GetAllProductsUseCase = defaultGetAllUseCase,
+    private searchProductsUseCase: SearchProductsUseCase = defaultSearchUseCase,
+    private updateProductUseCase: UpdateProductUseCase = defaultUpdateUseCase,
+    private deleteProductUseCase: DeleteProductUseCase = defaultDeleteUseCase
+  ) {}
+
   async create(req: Request, res: Response) {
     try {
       const { name, unit, price, imageUrl } = req.body;
-
-      const id = await createProductUseCase.execute({
+      const id = await this.createProductUseCase.execute({
         name,
         unit,
         price,
@@ -36,7 +47,7 @@ export class ProductController {
 
   async getAll(req: Request, res: Response) {
     try {
-      const products = await getAllProductsUseCase.execute();
+      const products = await this.getAllProductsUseCase.execute();
       res.status(200).json({
         success: true,
         products,
@@ -52,9 +63,7 @@ export class ProductController {
   async search(req: Request, res: Response) {
     try {
       const { search } = req.query;
-      console.log(`[SEARCH] Buscando productos con query: "${req.query.search}"`);
-
-      const products = await searchProductsUseCase.execute(
+      const products = await this.searchProductsUseCase.execute(
         typeof search === "string" ? search : undefined
       );
 
@@ -75,13 +84,12 @@ export class ProductController {
       const { id } = req.params;
       const { name, unit, price, imageUrl } = req.body;
 
-      const updateData: any = {};
-      if (name !== undefined) updateData.name = name;
-      if (unit !== undefined) updateData.unit = unit;
-      if (price !== undefined) updateData.price = Number(price);
-      if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
-
-      await productRepo.update(id, updateData);
+      await this.updateProductUseCase.execute(id, {
+        name,
+        unit,
+        price: price !== undefined ? Number(price) : undefined,
+        imageUrl,
+      });
 
       res.status(200).json({
         success: true,
@@ -98,8 +106,7 @@ export class ProductController {
   async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
-
-      await productRepo.delete(id);
+      await this.deleteProductUseCase.execute(id);
 
       res.status(200).json({
         success: true,

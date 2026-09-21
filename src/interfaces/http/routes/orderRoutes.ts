@@ -8,10 +8,15 @@ import {
   UpdateOrderStatusSchema,
   UpdateOrderDeliveriesSchema,
   CompleteDeliverySchema,
+  AttachDeliveryProofSchema,
 } from "../schemas/orderSchemas";
+import { validateImageFile } from "../middlewares/validateImageFile";
 import multer from "multer";
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB límite
+});
 
 export const orderRoutes = (router: Router) => {
   const orderController = new OrderController();
@@ -100,6 +105,8 @@ export const orderRoutes = (router: Router) => {
     authenticate,
     requireRole(["driver", "admin"]),
     upload.single("image"),
+    validateImageFile,
+    validate(AttachDeliveryProofSchema),
     async (req, res) => {
       await orderController.attachToDelivery(req, res);
     }
@@ -111,6 +118,7 @@ export const orderRoutes = (router: Router) => {
     authenticate,
     requireRole(["driver", "admin"]),
     upload.single("image"),
+    validateImageFile,
     validate(CompleteDeliverySchema),
     async (req, res) => {
       await orderController.completeDeliveryWithProof(req, res);

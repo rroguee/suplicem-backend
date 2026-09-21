@@ -4,7 +4,7 @@ import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { AuthService } from "../../../domain/services/AuthService";
 import { RegistrationBotService } from "../../../infrastructure/services/RegistrationBotService";
 import { SynthIDDetectorService } from "../../../infrastructure/services/SynthIDDetectorService";
-import { CreateUserDto } from "../../dtos/UserDtos";
+import { ApplicationActor, CreateUserDto } from "../../dtos/UserDtos";
 import { uploadIdentificationImage, deleteStorageFile } from "../../../domain/services/ImageStorageService";
 
 export class CreateUserUseCase {
@@ -16,7 +16,7 @@ export class CreateUserUseCase {
     private authService: AuthService
   ) {}
 
-  async execute(data: CreateUserDto, file?: Express.Multer.File): Promise<any> {
+ async execute(data: CreateUserDto, file?: Express.Multer.File,  requester?: ApplicationActor): Promise<any> {
     if (!data) {
       throw new Error("Datos de registro no recibidos.");
     }
@@ -43,15 +43,23 @@ export class CreateUserUseCase {
     const password = (parsedData?.password || parsedData?.data?.password || "").toString();
     const names = (parsedData?.names || parsedData?.data?.names || "").toString().trim();
     const lastNames = (parsedData?.lastNames || parsedData?.data?.lastNames || "").toString().trim();
-    const userType = parsedData?.userType || parsedData?.data?.userType || "client";
+    const requestedUserType = parsedData?.userType || parsedData?.data?.userType || "client";
     const identification = (parsedData?.identification || parsedData?.data?.identification || "").toString().trim();
     const identificationType = parsedData?.identificationType || parsedData?.data?.identificationType || "Cedula";
     const phone = (parsedData?.phone || parsedData?.data?.phone || "").toString().trim();
-
-    if (!email || !password) {
-      throw new Error("El correo electrónico y la contraseña son requeridos.");
+    // 🔒 Control estricto de escalada de privilegios
+    const isAuthorizedAdmin = requester?.userType === "admin" && requester?.status === "active";
+    if (requestedUserType === "admin" && !isAuthorizedAdmin) {
+      throw new Error("Acceso denegado: solo un administrador activo puede crear cuentas con rol admin.");
     }
-
+    const userType = isAuthorizedAdmin
+      ? requestedUserType
+      : requestedUserType === "driver"
+      ? "driver"
+      : "client";
+    const status = isAuthorizedAdmin
+      ? (parsedData.status || "active")
+      : "pending";
     if (identificationType === "Cedula") {
       if (!isValidDominicanCedula(identification)) {
         throw new Error("El número de cédula dominicana ingresado no es válido.");
@@ -117,7 +125,7 @@ export class CreateUserUseCase {
         phone,
         userType,
         createdAt: new Date().toISOString(),
-        status: "pending",
+        status,
         aiRiskFlag,
         aiRiskScore,
       };

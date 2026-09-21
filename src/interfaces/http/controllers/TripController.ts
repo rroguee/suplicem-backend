@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { TripFirestoreRepository } from "../../../infrastructure/firestore/TripFirestoreRepository";
+import { OrderFirestoreRepository } from "../../../infrastructure/firestore/OrderFirestoreRepository";
 import { CreateTripUseCase } from "../../../application/use-cases/trip/CreateTripUseCase";
 import { GetAvailableTripsUseCase } from "../../../application/use-cases/trip/GetAvailableTripsUseCase";
 import { AcceptTripUseCase } from "../../../application/use-cases/trip/AcceptTripUseCase";
@@ -11,48 +12,35 @@ import { GetTripByIdUseCase } from "../../../application/use-cases/trip/GetTripB
 import { GetDriverActualTripsUseCase } from "../../../application/use-cases/trip/GetDriverActualTripsUseCase";
 import { GetTripByOrderIdUseCase } from "../../../application/use-cases/trip/GetTripByOrderIdUseCase";
 import { GetDriverActiveTripUseCase } from "../../../application/use-cases/trip/GetDriverActiveTripUseCase";
-import { OrderFirestoreRepository } from "../../../infrastructure/firestore/OrderFirestoreRepository";
 import { CompleteTripUseCase } from "../../../application/use-cases/trip/CompleteTripUseCase";
 import { CreateTripWithOrdersUseCase } from "../../../application/use-cases/trip/CreateTripWithOrdersUseCase";
 
 const tripRepo = new TripFirestoreRepository();
-const orderRepo = new OrderFirestoreRepository();                    
-const createTripUseCase = new CreateTripUseCase(tripRepo, orderRepo); 
-const createTripWithOrdersUseCase = new CreateTripWithOrdersUseCase(tripRepo);
-const getAvailableTripsUseCase = new GetAvailableTripsUseCase(tripRepo);
-const getDriverTripHistoryUseCase = new GetDriverTripHistoryUseCase(tripRepo);
-const getDriverActualTripsUseCase = new GetDriverActualTripsUseCase(tripRepo);
-const getAllTripsUseCase = new GetAllTripsUseCase(tripRepo);
-const acceptTripUseCase = new AcceptTripUseCase(tripRepo);
-const getTripDetailsUseCase = new GetTripDetailsUseCase(tripRepo);
-const getTripByOrderIdUseCase = new GetTripByOrderIdUseCase(tripRepo);
-const updateTripStatusUseCase = new UpdateTripStatusUseCase(tripRepo);
-const completeTripUseCase = new CompleteTripUseCase(tripRepo);
-const getTripByIdUseCase = new GetTripByIdUseCase(tripRepo);
-const getDriverActiveTripUseCase = new GetDriverActiveTripUseCase(tripRepo);
+const orderRepo = new OrderFirestoreRepository();
 
 export class TripController {
+  constructor(
+    private createTripUseCase = new CreateTripUseCase(tripRepo, orderRepo),
+    private createTripWithOrdersUseCase = new CreateTripWithOrdersUseCase(tripRepo),
+    private getAvailableTripsUseCase = new GetAvailableTripsUseCase(tripRepo),
+    private getDriverTripHistoryUseCase = new GetDriverTripHistoryUseCase(tripRepo),
+    private getDriverActualTripsUseCase = new GetDriverActualTripsUseCase(tripRepo),
+    private getAllTripsUseCase = new GetAllTripsUseCase(tripRepo),
+    private acceptTripUseCase = new AcceptTripUseCase(tripRepo),
+    private getTripDetailsUseCase = new GetTripDetailsUseCase(tripRepo),
+    private getTripByOrderIdUseCase = new GetTripByOrderIdUseCase(tripRepo),
+    private updateTripStatusUseCase = new UpdateTripStatusUseCase(tripRepo),
+    private completeTripUseCase = new CompleteTripUseCase(tripRepo),
+    private getTripByIdUseCase = new GetTripByIdUseCase(tripRepo),
+    private getDriverActiveTripUseCase = new GetDriverActiveTripUseCase(tripRepo)
+  ) {}
+
   async create(req: Request, res: Response) {
     try {
-      const { tripNumber, orderIds, comments, totalTons } = req.body;
-
-      const tripId = await createTripUseCase.execute({
-        tripNumber,
-        orderIds,
-        comments,
-        totalTons,
-      });
-
-      res.status(201).json({
-        success: true,
-        message: "Viaje creado correctamente",
-        tripId,
-      });
+      const tripId = await this.createTripUseCase.execute(req.body);
+      res.status(201).json({ success: true, message: "Viaje creado correctamente", tripId });
     } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Error al crear el viaje",
-      });
+      res.status(400).json({ success: false, message: error.message || "Error al crear el viaje" });
     }
   }
 
@@ -61,84 +49,43 @@ export class TripController {
       const user = (req as any).user;
       const isDriver = String(user?.userType || "").trim().toLowerCase() === "driver";
       const driverId = isDriver ? user?.uid : undefined;
-      const trips = await getAvailableTripsUseCase.execute(driverId);
-
-      res.status(200).json({
-        success: true,
-        trips,
-      });
+      const trips = await this.getAvailableTripsUseCase.execute(driverId);
+      res.status(200).json({ success: true, trips });
     } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Error al obtener todos los viajes",
-      });
+      res.status(500).json({ success: false, message: error.message || "Error al obtener todos los viajes" });
     }
   }
 
-  async getAll(req: Request, res: Response) {
+  async getAll(_req: Request, res: Response) {
     try {
-      const trips = await getAllTripsUseCase.execute();
-
-      res.status(200).json({
-        success: true,
-        trips,
-      });
+      const trips = await this.getAllTripsUseCase.execute();
+      res.status(200).json({ success: true, trips });
     } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Error al obtener los viajes",
-      });
+      res.status(500).json({ success: false, message: error.message || "Error al obtener los viajes" });
     }
   }
 
   async getDriverTripHistory(req: Request, res: Response) {
     try {
       const userId = req.user?.uid;
+      if (!userId) return res.status(401).json({ success: false, message: "Usuario no autenticado" });
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Usuario no autenticado",
-        });
-      }
-
-      const trips = await getDriverTripHistoryUseCase.execute(userId);
-
-      res.status(200).json({
-        success: true,
-        trips,
-      });
+      const trips = await this.getDriverTripHistoryUseCase.execute(userId);
+      res.status(200).json({ success: true, trips });
     } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message:
-          error.message || "Error al obtener el historial de viajes del conductor",
-      });
+      res.status(500).json({ success: false, message: error.message || "Error al obtener el historial" });
     }
   }
 
   async getDriverActualTrips(req: Request, res: Response) {
     try {
       const userId = req.user?.uid;
+      if (!userId) return res.status(401).json({ success: false, message: "Usuario no autenticado" });
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Usuario no autenticado",
-        });
-      }
-
-      const trips = await getDriverActualTripsUseCase.execute(userId);
-
-      res.status(200).json({
-        success: true,
-        trips,
-      });
+      const trips = await this.getDriverActualTripsUseCase.execute(userId);
+      res.status(200).json({ success: true, trips });
     } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Error al obtener los viajes disponibles",
-      });
+      res.status(500).json({ success: false, message: error.message || "Error al obtener viajes disponibles" });
     }
   }
 
@@ -146,118 +93,42 @@ export class TripController {
     try {
       const tripId = req.params.id;
       const driverId = req.user?.uid;
+      if (!driverId) return res.status(403).json({ success: false, message: "Solo conductores pueden aceptar viajes" });
 
-      if (!driverId) {
-        return res.status(403).json({
-          success: false,
-          message: "Solo conductores pueden aceptar viajes",
-        });
-      }
-
-      const trip = await getTripByIdUseCase.execute(tripId);
-
-      if (!trip) {
-        return res.status(404).json({
-          success: false,
-          message: "El viaje no existe",
-        });
-      }
-
-      if (trip.status !== "available") {
-        if (
-          trip.status === "accepted" &&
-          (trip.assignedDriverId === driverId || (trip as any).driverId === driverId)
-        ) {
-          return res.status(200).json({
-            success: true,
-            message: "Viaje aceptado correctamente",
-          });
-        }
-
-        return res.status(403).json({
-          success: false,
-          message: `El viaje ${trip.tripNumber || tripId} ya no está disponible (estado: ${trip.status})`,
-        });
-      }
-
-      // Si el viaje fue asignado específicamente por el admin a otro chofer, no permitir que otro lo tome
-      if (trip.assignedDriverId && trip.assignedDriverId !== "" && trip.assignedDriverId !== driverId) {
-        return res.status(403).json({
-          success: false,
-          message: "Este viaje fue asignado específicamente a otro conductor",
-        });
-      }
-
-      await acceptTripUseCase.execute(tripId, driverId);
-
-      res.status(200).json({
-        success: true,
-        message: "Viaje aceptado correctamente",
-      });
+      await this.acceptTripUseCase.execute(tripId, driverId);
+      res.status(200).json({ success: true, message: "Viaje aceptado correctamente" });
     } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Error al aceptar el viaje",
-      });
+      res.status(error.statusCode || 500).json({ success: false, message: error.message || "Error al aceptar el viaje" });
     }
   }
 
   async getById(req: Request, res: Response) {
     try {
-      const tripId = req.params.id;
-
-      const trip = await getTripDetailsUseCase.execute(tripId);
-
-      res.status(200).json({
-        success: true,
-        trip,
-      });
+      const trip = await this.getTripDetailsUseCase.execute(req.params.id);
+      res.status(200).json({ success: true, trip });
     } catch (error: any) {
-      res.status(404).json({
-        success: false,
-        message: error.message || "Error al obtener el viaje",
-      });
+      res.status(404).json({ success: false, message: error.message || "Error al obtener el viaje" });
     }
   }
 
   async getTripByOrderId(req: Request, res: Response) {
     try {
-      const orderId = req.params.id;
-
-      const trip = await getTripByOrderIdUseCase.execute(orderId);
-
-      res.status(200).json({
-        success: true,
-        trip,
-      });
+      const trip = await this.getTripByOrderIdUseCase.execute(req.params.id);
+      res.status(200).json({ success: true, trip });
     } catch (error: any) {
-      res.status(404).json({
-        success: false,
-        message: error.message || "Error al obtener el viaje",
-      });
+      res.status(404).json({ success: false, message: error.message || "Error al obtener el viaje" });
     }
   }
 
-   async getDriverActiveTrip(req: Request, res: Response) {
+  async getDriverActiveTrip(req: Request, res: Response) {
     try {
       const userId = req.user?.uid;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Usuario no autenticado",
-        });
-      }
-      const trip = await getDriverActiveTripUseCase.execute(userId);
-      res.status(200).json({
-        success: true,
-        hasActiveTrip: Boolean(trip),
-        trip,
-      });
+      if (!userId) return res.status(401).json({ success: false, message: "Usuario no autenticado" });
+
+      const trip = await this.getDriverActiveTripUseCase.execute(userId);
+      res.status(200).json({ success: true, hasActiveTrip: Boolean(trip), trip });
     } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Error al obtener el viaje activo",
-      });
+      res.status(500).json({ success: false, message: error.message || "Error al obtener viaje activo" });
     }
   }
 
@@ -265,55 +136,25 @@ export class TripController {
     try {
       const tripId = req.params.id || req.body.tripId;
       const { status } = req.body;
-
-      if (!tripId || !status) {
-        return res.status(400).json({
-          success: false,
-          message: "tripId y status son requeridos",
-        });
-      }
+      if (!tripId || !status) return res.status(400).json({ success: false, message: "tripId y status son requeridos" });
 
       if (status === "completed") {
-        await completeTripUseCase.execute(tripId);
+        await this.completeTripUseCase.execute(tripId);
       } else {
-        await updateTripStatusUseCase.execute(tripId, status);
+        await this.updateTripStatusUseCase.execute(tripId, status);
       }
-
-      res.status(200).json({
-        success: true,
-        message: `Status actualizado correctamente a ${status}`,
-      });
+      res.status(200).json({ success: true, message: `Status actualizado correctamente a ${status}` });
     } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Error al actualizar el status",
-      });
+      res.status(400).json({ success: false, message: error.message || "Error al actualizar status" });
     }
   }
 
   async createWithOrders(req: Request, res: Response) {
     try {
-      const { tripNumber, orderIds, driverId, totalTons, comments, deliveries } = req.body;
-
-      const tripId = await createTripWithOrdersUseCase.execute({
-        tripNumber,
-        orderIds,
-        driverId,
-        totalTons,
-        comments,
-        deliveries,
-      });
-
-      res.status(201).json({
-        success: true,
-        message: "Viaje con órdenes creado correctamente",
-        tripId,
-      });
+      const tripId = await this.createTripWithOrdersUseCase.execute(req.body);
+      res.status(201).json({ success: true, message: "Viaje con órdenes creado correctamente", tripId });
     } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Error al crear el viaje con órdenes",
-      });
+      res.status(400).json({ success: false, message: error.message || "Error al crear viaje con órdenes" });
     }
   }
 }

@@ -3,7 +3,12 @@ import { TripController } from "../controllers/TripController";
 import { authenticate } from "../middlewares/authenticate";
 import { requireRole } from "../middlewares/authorize";
 import { validate } from "../middlewares/validate";
-import { CreateTripSchema, UpdateTripStatusSchema } from "../schemas/tripSchemas";
+import {
+  CreateTripSchema,
+  UpdateTripStatusSchema,
+  CreateTripWithOrdersSchema,
+  AcceptTripSchema,
+} from "../schemas/tripSchemas";
 
 export const tripRoutes = (router: Router) => {
   const tripController = new TripController();
@@ -33,6 +38,7 @@ export const tripRoutes = (router: Router) => {
     "/trips/create-with-orders",
     authenticate,
     requireRole(["admin"]),
+    validate(CreateTripWithOrdersSchema),
     async (req, res) => {
       await tripController.createWithOrders(req, res);
     }
@@ -104,6 +110,7 @@ export const tripRoutes = (router: Router) => {
     "/trips/:id/accept",
     authenticate,
     requireRole(["driver"]),
+    validate(AcceptTripSchema),
     async (req, res) => {
       await tripController.accept(req, res);
     }

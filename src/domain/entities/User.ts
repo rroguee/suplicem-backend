@@ -26,7 +26,7 @@ export interface User {
     plateNumber: string;
   };
   createdAt: string;
-  status: string; // 'pending' | 'active' | 'inactive' | 'rejected'
+  status: "pending" | "active" | "inactive" | "banned" | "rejected";
   driverCode?: string;
   aiRiskFlag?: boolean;
   aiRiskScore?: number;

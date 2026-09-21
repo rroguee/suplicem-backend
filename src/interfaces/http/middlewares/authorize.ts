@@ -15,10 +15,18 @@ export const requireRole = (allowedRoles: Array<"client" | "driver" | "admin">) 
     const userRole = String(user.userType || "").trim().toLowerCase();
     const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase());
 
-    if (!normalizedAllowed.includes(userRole)) {
+   if (!normalizedAllowed.includes(userRole)) {
       res.status(403).json({
         success: false,
         message: `Acceso denegado: se requiere uno de los siguientes roles [${allowedRoles.join(", ")}]`,
+      });
+      return;
+    }
+    // Exigencia estricta de cuenta activa para roles con permisos
+    if (user.status !== "active") {
+      res.status(403).json({
+        success: false,
+        message: "Acceso denegado: su cuenta se encuentra pendiente de aprobación o inactiva",
       });
       return;
     }

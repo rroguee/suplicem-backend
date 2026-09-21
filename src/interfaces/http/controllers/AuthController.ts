@@ -7,19 +7,21 @@ import { GetCurrentUserUseCase } from "../../../application/use-cases/user/GetCu
 import { RecoverPasswordUseCase } from "../../../application/use-cases/auth/RecoverPasswordUseCase";
 
 const authService = new FirebaseAuthService();
-const loginUseCase = new LoginUseCase(authService);
-const refreshTokenUseCase = new RefreshTokenUseCase(authService);
-const recoverPasswordUseCase = new RecoverPasswordUseCase(authService);
-
 const userRepo = new UserFirestoreRepository();
-const getCurrentUserUseCase = new GetCurrentUserUseCase(userRepo);
 
 export class AuthController {
+  constructor(
+    private loginUseCase = new LoginUseCase(authService),
+    private refreshTokenUseCase = new RefreshTokenUseCase(authService),
+    private recoverPasswordUseCase = new RecoverPasswordUseCase(authService),
+    private getCurrentUserUseCase = new GetCurrentUserUseCase(userRepo)
+  ) {}
+
   async login(req: Request, res: Response) {
     const { email, password } = req.body;
 
     try {
-      const result = await loginUseCase.execute({ email, password });
+      const result = await this.loginUseCase.execute({ email, password });
       res.status(200).json(result);
     } catch (error: any) {
       console.error("Error en login:", error?.response?.data || error.message);
@@ -44,9 +46,7 @@ export class AuthController {
   async refreshToken(req: Request, res: Response) {
     try {
       const { refreshToken } = req.body;
-
-      const result = await refreshTokenUseCase.execute(refreshToken);
-
+      const result = await this.refreshTokenUseCase.execute(refreshToken);
       res.status(200).json({
         success: true,
         ...result,
@@ -65,12 +65,10 @@ export class AuthController {
   async recoverPassword(req: Request, res: Response) {
     try {
       const { email } = req.body;
-      await recoverPasswordUseCase.execute(email);
-
+      await this.recoverPasswordUseCase.execute(email);
       res.status(200).json({
         success: true,
-        message:
-          "Se ha enviado un correo con las instrucciones para restablecer la contraseña.",
+        message: "Se ha enviado un correo con las instrucciones para restablecer la contraseña.",
       });
     } catch (error: any) {
       console.error("Error al enviar correo de recuperación:", error);
@@ -89,8 +87,7 @@ export class AuthController {
       const uid = req.user?.uid;
       if (!uid) throw new Error("Usuario no autenticado");
 
-      const user = await getCurrentUserUseCase.execute(uid);
-
+      const user = await this.getCurrentUserUseCase.execute(uid);
       res.status(200).json({
         success: true,
         user,

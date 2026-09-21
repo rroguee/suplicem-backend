@@ -49,8 +49,7 @@ test("Step 3 Audit - OrderController Dependency Injection & Thin Execution", asy
     {} as any, // updateOrderStatusUseCase
     {} as any, // markDeliveryCompletedUseCase
     mockAttachProofUseCase,
-    mockUpdateDeliveriesUseCase,
-    {} as any // orderRepo
+    mockUpdateDeliveriesUseCase
   );
 
   await t.test("updateDeliveries: should return 200 when successful", async () => {
