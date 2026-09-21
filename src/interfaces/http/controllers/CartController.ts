@@ -5,11 +5,14 @@ import { GetCartUseCase } from "../../../application/use-cases/cart/GetCartUseCa
 import { RemoveFromCartUseCase } from "../../../application/use-cases/cart/RemoveFromCartUseCase";
 
 const cartRepo = new CartFirestoreRepository();
-const addToCartUseCase = new AddToCartUseCase(cartRepo);
-const getCartUseCase = new GetCartUseCase(cartRepo);
-const removeFromCartUseCase = new RemoveFromCartUseCase(cartRepo);
 
 export class CartController {
+  constructor(
+    private addToCartUseCase = new AddToCartUseCase(cartRepo),
+    private getCartUseCase = new GetCartUseCase(cartRepo),
+    private removeFromCartUseCase = new RemoveFromCartUseCase(cartRepo)
+  ) {}
+
   async add(req: Request, res: Response) {
     try {
       const { productId, quantity, unit } = req.body;
@@ -22,7 +25,7 @@ export class CartController {
         });
       }
 
-      await addToCartUseCase.execute({ userId, productId, quantity, unit });
+      await this.addToCartUseCase.execute({ userId, productId, quantity, unit });
 
       res.status(201).json({
         success: true,
@@ -47,7 +50,7 @@ export class CartController {
         });
       }
 
-      const items = await getCartUseCase.execute(userId);
+      const items = await this.getCartUseCase.execute(userId);
 
       res.status(200).json({
         success: true,
@@ -73,7 +76,7 @@ export class CartController {
         });
       }
 
-      await removeFromCartUseCase.execute(userId, productId);
+      await this.removeFromCartUseCase.execute(userId, productId);
 
       res.status(200).json({
         success: true,

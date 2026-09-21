@@ -1,3 +1,5 @@
+import { validate } from "../middlewares/validate";
+import { CreateProductSchema, UpdateProductSchema } from "../schemas/productSchemas";
 import { Router } from "express";
 import { ProductController } from "../controllers/ProductController";
 import { authenticate } from "../middlewares/authenticate";
@@ -17,12 +19,14 @@ export const productRoutes = (router: Router) => {
     "/products",
     authenticate,
     requireRole(["admin"]),
+    validate(CreateProductSchema),
     (req, res) => productController.create(req, res)
   );
   router.put(
     "/products/:id",
     authenticate,
     requireRole(["admin"]),
+    validate(UpdateProductSchema),
     (req, res) => productController.update(req, res)
   );
   router.delete(
