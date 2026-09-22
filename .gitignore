@@ -38,3 +38,14 @@ get_users.js
 # AI Agent memory & rules
 GEMINI.md
 gemini.md
+
+# Tests & Coverage
+test/
+tests/
+__tests__/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+coverage/
+
