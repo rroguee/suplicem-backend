@@ -29,6 +29,23 @@ export const normalizeUserData = (req: Request, _res: Response, next: NextFuncti
       body.vehicle = JSON.parse(body.vehicle);
     } catch (e) {}
   }
+
+  // Normalizar tipo de identificación
+  if (body.identificationType === "Cédula") {
+    body.identificationType = "Cedula";
+  }
+
+  // Limpiar vehicle si no es conductor o si está vacío
+  if (body.vehicle) {
+    const isVehicleEmpty =
+      typeof body.vehicle !== "object" ||
+      (!body.vehicle.brand && !body.vehicle.model && !body.vehicle.plateNumber);
+
+    if (body.userType !== "driver" || isVehicleEmpty) {
+      delete body.vehicle;
+    }
+  }
+
   req.body = body;
   next();
 };
