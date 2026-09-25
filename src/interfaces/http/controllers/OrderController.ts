@@ -7,7 +7,7 @@ import { UpdateOrderStatusUseCase } from "../../../application/use-cases/order/U
 import { MarkDeliveryCompletedUseCase } from "../../../application/use-cases/order/MarkDeliveryCompletedUseCase";
 import { UpdateOrderDeliveriesUseCase } from "../../../application/use-cases/order/UpdateOrderDeliveriesUseCase";
 import { AttachDeliveryProofUseCase } from "../../../application/use-cases/order/AttachDeliveryProofUseCase";
-import { uploadDeliveryImage } from "../../../domain/services/ImageStorageService";
+import { uploadDeliveryImage, uploadReceiptImage } from "../../../domain/services/ImageStorageService";
 import { GetOrderByIdUseCase } from "../../../application/use-cases/order/GetOrderByIdUseCase";
 import { UserFirestoreRepository } from "../../../infrastructure/firestore/UserFirestoreRepository";
 import { GetOrderTrackingUseCase } from "../../../application/use-cases/order/GetOrderTrackingUseCase";
@@ -34,11 +34,20 @@ export class OrderController {
     private updateOrderDeliveriesUseCase = new UpdateOrderDeliveriesUseCase(orderRepo)
   ) {}
 
-  async create(req: Request, res: Response) {
+    async create(req: Request, res: Response) {
     try {
+      const authUser = (req as any).user;
+      let receiptImageUrl = req.body.receiptImage;
+
+      // Si el cliente adjuntó el archivo del comprobante, subirlo a Firebase Storage
+      if (req.file) {
+        receiptImageUrl = await uploadReceiptImage(req.file, authUser?.uid || "general");
+      }
+
       const { orderId, orderNumber } = await this.createOrderUseCase.execute({
         ...req.body,
-        userId: (req as any).user?.uid,
+        receiptImage: receiptImageUrl,
+        userId: authUser?.uid,
       });
       res.status(201).json({ success: true, orderId, orderNumber });
     } catch (error: any) {

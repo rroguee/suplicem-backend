@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { normalizeOrderData } from "../middlewares/normalizeOrderData";
 import { OrderController } from "../controllers/OrderController";
 import { authenticate } from "../middlewares/authenticate";
 import { requireRole } from "../middlewares/authorize";
@@ -30,6 +31,8 @@ export const orderRoutes = (router: Router) => {
     "/orders",
     authenticate,
     requireRole(["client"]),
+    upload.single("receiptImage"),
+    normalizeOrderData,
     validate(CreateOrderSchema),
     async (req, res) => {
       await orderController.create(req, res);

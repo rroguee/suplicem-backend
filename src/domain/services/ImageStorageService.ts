@@ -54,12 +54,81 @@ export const uploadIdentificationImage = async (
   }
 };
 
-export const deleteStorageFile = async (filePath: string): Promise<void> => {
+export const deleteStorageFile = async (filePathOrUrl: string): Promise<void> => {
   try {
     const bucket = storage.bucket();
+    let filePath = filePathOrUrl;
+
+    if (filePath.startsWith("http")) {
+      const bucketPrefix = `https://storage.googleapis.com/${bucket.name}/`;
+      if (filePath.startsWith(bucketPrefix)) {
+        filePath = filePath.replace(bucketPrefix, "").split("?")[0];
+      } else {
+        // Es una URL externa que no pertenece a nuestro Storage, retornar sin error
+        return;
+      }
+    }
+
     const fileRef = bucket.file(filePath);
-    await fileRef.delete();
+    const [exists] = await fileRef.exists();
+    if (exists) {
+      await fileRef.delete();
+    }
   } catch (error: any) {
     console.warn("Advertencia al eliminar archivo de Storage:", error?.message);
+  }
+};
+
+export const uploadReceiptImage = async (
+  file: Express.Multer.File,
+  userId: string
+): Promise<string> => {
+  try {
+    const bucket = storage.bucket();
+    const ext = (file.mimetype && file.mimetype.split("/")[1]) || "jpg";
+    const fileName = `receipts/${userId}/comprobante_${Date.now()}.${ext}`;
+    const fileRef = bucket.file(fileName);
+
+    await fileRef.save(file.buffer, {
+      contentType: file.mimetype || "image/jpeg",
+      public: true,
+      metadata: {
+        firebaseStorageDownloadTokens: uuid(),
+      },
+    });
+
+    return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+  } catch (error: any) {
+    console.warn(
+      "Advertencia en Firebase Storage uploadReceiptImage:",
+      error?.message || error,
+      "- utilizando fallback base64"
+    );
+
+    const mime = file.mimetype || "image/jpeg";
+    const base64 = file.buffer.toString("base64");
+    return `data:${mime};base64,${base64}`;
+  }
+};
+
+export const uploadProductImage = async (
+  file: Express.Multer.File
+): Promise<string> => {
+  try {
+    const bucket = storage.bucket();
+    const ext = (file.mimetype && file.mimetype.split("/")[1]) || "jpg";
+    const fileName = `products/prod_${Date.now()}.${ext}`;
+    const fileRef = bucket.file(fileName);
+    await fileRef.save(file.buffer, {
+      contentType: file.mimetype || "image/jpeg",
+      public: true,
+      metadata: {
+        firebaseStorageDownloadTokens: uuid(),
+      },
+    });
+    return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+  } catch (error: any) {
+    console.warn("Advertencia en Firebase Storage uploadProductImage:", error?.message || error);
+    throw error;
   }
 };
