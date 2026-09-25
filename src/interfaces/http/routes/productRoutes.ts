@@ -1,9 +1,16 @@
-import { validate } from "../middlewares/validate";
-import { CreateProductSchema, UpdateProductSchema } from "../schemas/productSchemas";
 import { Router } from "express";
+import multer from "multer";
 import { ProductController } from "../controllers/ProductController";
 import { authenticate } from "../middlewares/authenticate";
 import { requireRole } from "../middlewares/authorize";
+import { validate } from "../middlewares/validate";
+import { normalizeProductData } from "../middlewares/normalizeProductData";
+import { CreateProductSchema, UpdateProductSchema } from "../schemas/productSchemas";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB límite
+});
 
 export const productRoutes = (router: Router) => {
   const productController = new ProductController();
@@ -19,6 +26,8 @@ export const productRoutes = (router: Router) => {
     "/products",
     authenticate,
     requireRole(["admin"]),
+    upload.single("image"),
+    normalizeProductData,
     validate(CreateProductSchema),
     (req, res) => productController.create(req, res)
   );
@@ -26,6 +35,8 @@ export const productRoutes = (router: Router) => {
     "/products/:id",
     authenticate,
     requireRole(["admin"]),
+    upload.single("image"),
+    normalizeProductData,
     validate(UpdateProductSchema),
     (req, res) => productController.update(req, res)
   );

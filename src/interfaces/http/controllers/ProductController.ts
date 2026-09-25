@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { uploadProductImage } from "../../../domain/services/ImageStorageService";
 import { ProductFirestoreRepository } from "../../../infrastructure/firestore/ProductFirestoreRepository";
 import { CreateProductUseCase } from "../../../application/use-cases/product/CreateProductUseCase";
 import { GetAllProductsUseCase } from "../../../application/use-cases/product/GetAllProductsUseCase";
@@ -22,9 +23,12 @@ export class ProductController {
     private deleteProductUseCase: DeleteProductUseCase = defaultDeleteUseCase
   ) {}
 
-  async create(req: Request, res: Response) {
+    async create(req: Request, res: Response) {
     try {
-      const { name, unit, price, imageUrl } = req.body;
+      let { name, unit, price, imageUrl } = req.body;
+      if (req.file) {
+        imageUrl = await uploadProductImage(req.file);
+      }
       const id = await this.createProductUseCase.execute({
         name,
         unit,
