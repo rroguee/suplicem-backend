@@ -26,10 +26,20 @@ export const authenticate = async (
 
   const idToken = authHeader.split(" ")[1];
 
+  let decodedToken;
   try {
     // 1. Verificación criptográfica estricta con Firebase Admin
-    const decodedToken = await auth.verifyIdToken(idToken);
+    decodedToken = await auth.verifyIdToken(idToken);
+  } catch (tokenError: any) {
+    console.error("Token verification failed:", tokenError?.message || tokenError);
+    res.status(401).json({
+      success: false,
+      message: "Token inválido o expirado",
+    });
+    return;
+  }
 
+  try {
     // 2. Obtener el rol y estado real del usuario desde Firestore
     const userDoc = await firestore
       .collection("users")
@@ -48,11 +58,11 @@ export const authenticate = async (
     } as AuthenticatedUser;
 
     next();
-  } catch (error: any) {
-    console.error("Authentication middleware error:", error);
-    res.status(401).json({
+  } catch (dbError: any) {
+    console.error("Firestore error in auth middleware:", dbError?.message || dbError);
+    res.status(500).json({
       success: false,
-      message: "Token inválido o expirado",
+      message: "Error de conexión con la base de datos al validar usuario",
     });
   }
 };

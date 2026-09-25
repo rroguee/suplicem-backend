@@ -25,8 +25,19 @@ export const authenticateOptional = async (
 
   const idToken = authHeader.split(" ")[1];
 
+  let decodedToken;
   try {
-    const decodedToken = await auth.verifyIdToken(idToken);
+    decodedToken = await auth.verifyIdToken(idToken);
+  } catch (tokenError: any) {
+    console.error("Token verification failed (optional auth):", tokenError?.message || tokenError);
+    res.status(401).json({
+      success: false,
+      message: "Token inválido o expirado",
+    });
+    return;
+  }
+
+  try {
     const userDoc = await firestore
       .collection("users")
       .doc(decodedToken.uid)
@@ -44,10 +55,11 @@ export const authenticateOptional = async (
     } as ApplicationActor;
 
     next();
-  } catch (error: any) {
-    res.status(401).json({
+  } catch (dbError: any) {
+    console.error("Firestore error in optional auth middleware:", dbError?.message || dbError);
+    res.status(500).json({
       success: false,
-      message: "Token inválido o expirado",
+      message: "Error de conexión con la base de datos al validar usuario",
     });
   }
 };
