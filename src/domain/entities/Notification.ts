@@ -7,9 +7,10 @@ export type NotificationType =
   | "trip_in_transit"
   | "delivery_completed"
   | "client_assigned"
-  | "credit_approved";
+  | "credit_approved"
+  | "account_status_changed";
 
-export type NotificationCategory = "orders" | "deliveries" | "clients";
+export type NotificationCategory = "orders" | "deliveries" | "clients" | "account";
 
 export interface NotificationPreview {
   badgeLabel: string;
@@ -25,7 +26,7 @@ export interface NotificationPreview {
 export interface Notification {
   id?: string;
   recipientId: string;
-  recipientRole?: "seller" | "admin" | "client";
+  recipientRole?: "seller" | "admin" | "client" | "driver";
   type: NotificationType;
   category: NotificationCategory;
   actorId?: string;

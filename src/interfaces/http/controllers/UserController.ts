@@ -25,7 +25,13 @@ const smsService = new TwilioSmsService();
 const createUserUseCase = new CreateUserUseCase(userRepo, authService, notificationDispatcher);
 const getAllUsersUseCase = new GetAllUsersUseCase(userRepo);
 const getUserByIdUseCase = new GetUserByIdUseCase(userRepo);
-const updateUserStatusUseCase = new UpdateUserStatusUseCase(userRepo, authService, smsService);
+const updateUserStatusUseCase = new UpdateUserStatusUseCase(
+  userRepo,
+  authService,
+  smsService,
+  undefined,
+  notificationDispatcher
+);
 const updateUserUseCase = new UpdateUserUseCase(userRepo, notificationDispatcher);
 const verifyCedulaUseCase = new VerifyCedulaUseCase(
   new JceIdentityService(),

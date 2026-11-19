@@ -5,13 +5,15 @@ import { SmsService } from "../../../domain/services/SmsService";
 import { normalizeDominicanPhone } from "../../../domain/services/PhoneService";
 import { User } from "../../../domain/entities/User";
 import { UpdateUserStatusDto } from "../../dtos/UserDtos";
+import { NotificationDispatcherService } from "../../services/NotificationDispatcherService";
 
 export class UpdateUserStatusUseCase {
   constructor(
     private userRepo: UserRepository,
     private authService?: AuthService,
     private smsService?: SmsService,
-    private botService: RegistrationBotService = new RegistrationBotService()
+    private botService: RegistrationBotService = new RegistrationBotService(),
+    private notificationDispatcher?: NotificationDispatcherService
   ) {}
 
   async execute({ uid, status }: UpdateUserStatusDto, requesterUid?: string): Promise<void> {
@@ -42,7 +44,12 @@ export class UpdateUserStatusUseCase {
     }
 
     // Si el administrador aprueba una cuenta nueva por primera vez (estado cambia de 'pending' a 'active'), enviar correo con el bot
-    if (status === "active" && previousStatus === "pending" && user.email) {
+    if (
+      status === "active" &&
+      previousStatus === "pending" &&
+      user.email &&
+      user.notifications?.email !== false
+    ) {
       try {
         await this.botService.sendAccountApprovedEmailBot(
           user.email,
@@ -54,7 +61,32 @@ export class UpdateUserStatusUseCase {
       }
     }
 
+    await this.sendInAppStatusNotification(user, status, previousStatus);
     await this.sendStatusSms(user, status, previousStatus);
+  }
+
+  private async sendInAppStatusNotification(
+    user: User,
+    status: User["status"],
+    previousStatus: User["status"]
+  ): Promise<void> {
+    if (!this.notificationDispatcher || user.notifications?.inApp === false) return;
+    if (status === "pending") return;
+
+    try {
+      await this.notificationDispatcher.notifyAccountStatusChanged({
+        userId: user.uid,
+        userType: user.userType,
+        status,
+        previousStatus,
+        userName: `${user.names || ""} ${user.lastNames || ""}`.trim() || undefined,
+      });
+    } catch (error: any) {
+      console.warn(
+        "[Notification] No se pudo crear la notificación de estado:",
+        error?.message || error
+      );
+    }
   }
 
   private async sendStatusSms(
@@ -63,13 +95,17 @@ export class UpdateUserStatusUseCase {
     previousStatus: User["status"]
   ): Promise<void> {
     if (!this.smsService || !user.phone) return;
+    if (user.notifications?.sms === false) return;
 
     const message = this.buildStatusMessage(status, previousStatus);
     if (!message) return;
 
     try {
       const phone = normalizeDominicanPhone(user.phone);
-      await this.smsService.sendMessage(phone, message);
+      await this.smsService.sendMessage(phone, message, {
+        recipientId: user.uid,
+        kind: "account_status",
+      });
     } catch (error: any) {
       console.warn("[SMS] No se pudo notificar el cambio de estado:", error?.message || error);
     }

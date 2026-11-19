@@ -75,6 +75,14 @@ export const CreateUserSchema = z
     }
   );
 
+const NotificationPreferencesSchema = z.object({
+  sms: z.boolean().optional(),
+  email: z.boolean().optional(),
+  push: z.boolean().optional(),
+  inApp: z.boolean().optional(),
+  whatsapp: z.boolean().optional(),
+});
+
 export const UpdateUserSchema = z.object({
   uid: z.string().min(1, "uid es requerido"),
   names: z.string().optional(),
@@ -84,6 +92,8 @@ export const UpdateUserSchema = z.object({
   vehicle: VehicleSchema.optional(),
   identificationImage: z.string().optional(),
   sellerId: z.string().nullable().optional(),
+  notifications: NotificationPreferencesSchema.optional(),
+  expoPushToken: z.string().max(512).nullable().optional(),
 });
 
 export const UpdateUserStatusSchema = z.object({

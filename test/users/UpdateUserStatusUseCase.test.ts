@@ -46,6 +46,18 @@ const createBotService = () => {
   };
 };
 
+const createNotificationDispatcher = () => {
+  const calls: any[] = [];
+  return {
+    calls,
+    service: {
+      notifyAccountStatusChanged: async (params: any) => {
+        calls.push(params);
+      },
+    } as any,
+  };
+};
+
 describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
   test("Aprueba una cuenta pendiente y envía SMS + correo", async () => {
     const user = createUser();
@@ -153,6 +165,82 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
 
     assert.strictEqual(sms.calls.length, 0);
     assert.strictEqual(bot.calls.length, 0);
+  });
+
+  test("Crea notificación in-app al aprobar una cuenta pendiente", async () => {
+    const user = createUser();
+    const sms = createSmsService();
+    const bot = createBotService();
+    const notifications = createNotificationDispatcher();
+    const useCase = new UpdateUserStatusUseCase(
+      createUserRepo(user),
+      undefined,
+      sms.service,
+      bot.service,
+      notifications.service
+    );
+
+    await useCase.execute({ uid: user.uid, status: "active" });
+
+    assert.strictEqual(notifications.calls.length, 1);
+    assert.strictEqual(notifications.calls[0].userId, user.uid);
+    assert.strictEqual(notifications.calls[0].status, "active");
+    assert.strictEqual(notifications.calls[0].previousStatus, "pending");
+  });
+
+  test("Respeta el opt-out de SMS pero mantiene la notificación in-app", async () => {
+    const user = createUser({ notifications: { sms: false } });
+    const sms = createSmsService();
+    const bot = createBotService();
+    const notifications = createNotificationDispatcher();
+    const useCase = new UpdateUserStatusUseCase(
+      createUserRepo(user),
+      undefined,
+      sms.service,
+      bot.service,
+      notifications.service
+    );
+
+    await useCase.execute({ uid: user.uid, status: "active" });
+
+    assert.strictEqual(sms.calls.length, 0);
+    assert.strictEqual(notifications.calls.length, 1);
+  });
+
+  test("Respeta el opt-out de notificaciones in-app", async () => {
+    const user = createUser({ notifications: { inApp: false } });
+    const sms = createSmsService();
+    const bot = createBotService();
+    const notifications = createNotificationDispatcher();
+    const useCase = new UpdateUserStatusUseCase(
+      createUserRepo(user),
+      undefined,
+      sms.service,
+      bot.service,
+      notifications.service
+    );
+
+    await useCase.execute({ uid: user.uid, status: "active" });
+
+    assert.strictEqual(sms.calls.length, 1);
+    assert.strictEqual(notifications.calls.length, 0);
+  });
+
+  test("Respeta el opt-out de correo en la aprobación", async () => {
+    const user = createUser({ notifications: { email: false } });
+    const sms = createSmsService();
+    const bot = createBotService();
+    const useCase = new UpdateUserStatusUseCase(
+      createUserRepo(user),
+      undefined,
+      sms.service,
+      bot.service
+    );
+
+    await useCase.execute({ uid: user.uid, status: "active" });
+
+    assert.strictEqual(bot.calls.length, 0);
+    assert.strictEqual(sms.calls.length, 1);
   });
 
   test("Un fallo de Twilio no impide actualizar el estado", async () => {
