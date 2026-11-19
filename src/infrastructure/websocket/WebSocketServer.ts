@@ -6,6 +6,7 @@ import { UserFirestoreRepository } from "../firestore/UserFirestoreRepository";
 import { TripFirestoreRepository } from "../firestore/TripFirestoreRepository";
 import { OrderFirestoreRepository } from "../firestore/OrderFirestoreRepository";
 import { TripAuthorizationService } from "../../application/services/TripAuthorizationService";
+import { isOriginAllowed } from "../../config/cors";
 
 export interface DriverLocationPayload {
   tripId: string;
@@ -29,8 +30,14 @@ export class WebSocketServer {
 
     this.io = new Server(httpServer, {
       cors: {
-        origin: "*",
+        origin: (origin, callback) => {
+          if (isOriginAllowed(origin)) {
+            return callback(null, true);
+          }
+          return callback(new Error(`WebSocket bloqueado por CORS: origen ${origin} no autorizado`));
+        },
         methods: ["GET", "POST"],
+        credentials: true,
       },
       pingTimeout: 30000,
       pingInterval: 10000,

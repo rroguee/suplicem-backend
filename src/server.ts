@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import compression from "compression";
 import helmet from "helmet";
+import { corsOptions } from "./config/cors";
 import { registerRoutes } from "./interfaces/http/routes";
 import { globalLimiter } from "./interfaces/http/middlewares/rateLimiter";
 import { errorHandler } from "./interfaces/http/middlewares/errorHandler";
@@ -17,7 +18,7 @@ export const startServer = () => {
   app.set("trust proxy", 1);
 
   app.use(helmet({ crossOriginResourcePolicy: false }));
-  app.use(cors());
+  app.use(cors(corsOptions));
   app.use(compression());
 
   // Logging middleware

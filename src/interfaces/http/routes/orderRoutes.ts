@@ -14,6 +14,7 @@ import {
   GetOrdersQuerySchema,
 } from "../schemas/orderSchemas";
 import { validateImageFile } from "../middlewares/validateImageFile";
+import { validateReceiptUpload } from "../middlewares/validateReceiptUpload";
 import multer from "multer";
 
 const upload = multer({
@@ -136,6 +137,7 @@ export const orderRoutes = (router: Router) => {
     authenticate,
     requireRole(["client", "admin"]),
     upload.single("receiptImage"),
+    validateReceiptUpload,
     async (req, res) => {
       await orderController.updateReceipt(req, res);
     }
