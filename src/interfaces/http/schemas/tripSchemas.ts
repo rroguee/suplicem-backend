@@ -81,3 +81,20 @@ export const SplitOrderTripsSchema = z.object({
     )
     .min(1, "Debe incluir al menos un viaje"),
 });
+
+export const GetTripsQuerySchema = z
+  .object({
+    status: z.string().trim().optional(),
+    search: z.string().trim().optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .optional()
+  .default({});
+
+export const GetTripDirectionsQuerySchema = z.object({
+  originLat: z.coerce.number().min(-90).max(90, "originLat debe estar entre -90 y 90"),
+  originLng: z.coerce.number().min(-180).max(180, "originLng debe estar entre -180 y 180"),
+  destLat: z.coerce.number().min(-90).max(90, "destLat debe estar entre -90 y 90"),
+  destLng: z.coerce.number().min(-180).max(180, "destLng debe estar entre -180 y 180"),
+});

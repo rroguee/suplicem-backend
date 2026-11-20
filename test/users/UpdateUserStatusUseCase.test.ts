@@ -16,8 +16,14 @@ const createUser = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
+const adminUser = createUser({
+  uid: "admin-1",
+  userType: "admin",
+  status: "active",
+});
+
 const createUserRepo = (user: any) => ({
-  getById: async () => user,
+  getById: async (id: string) => (id === "admin-1" ? adminUser : user),
   update: async () => undefined,
 } as any);
 
@@ -70,7 +76,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       bot.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "active" });
+    await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 1);
     assert.strictEqual(sms.calls[0].phone, "+18091234567");
@@ -89,7 +95,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       bot.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "active" });
+    await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 1);
     assert.match(sms.calls[0].body, /aprobada/i);
@@ -107,7 +113,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       bot.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "inactive" });
+    await useCase.execute({ uid: user.uid, status: "inactive" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 1);
     assert.match(sms.calls[0].body, /desactivada/i);
@@ -125,7 +131,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       bot.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "rejected" });
+    await useCase.execute({ uid: user.uid, status: "rejected" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 1);
     assert.match(sms.calls[0].body, /rechazada/i);
@@ -143,7 +149,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       bot.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "banned" });
+    await useCase.execute({ uid: user.uid, status: "banned" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 1);
     assert.match(sms.calls[0].body, /suspendida/i);
@@ -161,7 +167,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       bot.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "active" });
+    await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 0);
     assert.strictEqual(bot.calls.length, 0);
@@ -247,7 +253,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
     const user = createUser({ status: "pending" });
     const updates: string[] = [];
     const repo = {
-      getById: async () => user,
+      getById: async (id: string) => (id === "admin-1" ? adminUser : user),
       update: async (_uid: string, updated: any) => {
         updates.push(updated.status);
       },
@@ -268,7 +274,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
     };
 
     try {
-      await useCase.execute({ uid: user.uid, status: "active" });
+      await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
     } finally {
       console.warn = originalWarn;
     }

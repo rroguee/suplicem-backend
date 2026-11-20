@@ -52,11 +52,21 @@ export const CreateOrderSchema = z
     receiptImage: z.string().optional(),
     paymentMethod: z.enum(["transfer", "credit"]).optional(),
     bankAccountId: z.string().optional(),
+    bankReferenceNumber: z.string().trim().optional(),
     creditNote: z.string().optional(),
     idempotencyKey: z.string().optional(),
     createdBySellerId: z.string().optional(),
+    createdByAdminId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.paymentMethod === "transfer" && (!data.bankReferenceNumber || data.bankReferenceNumber.length < 3)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "El número de comprobante o referencia bancaria es obligatorio para pagos por transferencia.",
+        path: ["bankReferenceNumber"],
+      });
+    }
+
     if (
       data.deliveryType === "domicilio" &&
       (!data.deliveries || data.deliveries.length === 0)
@@ -68,8 +78,8 @@ export const CreateOrderSchema = z
       });
     }
 
-    // Regla de Negocio: Pedidos directos vs Venta Asistida de cemento
-    const isSellerAssisted = Boolean(data.createdBySellerId);
+    // Regla de Negocio: Pedidos directos vs Venta Asistida de cemento (vendedor o administración)
+    const isSellerAssisted = Boolean(data.createdBySellerId || data.createdByAdminId);
 
     data.items.forEach((item, index) => {
       const isCement = item.unit === "fundas" || (item.name && item.name.toLowerCase().includes("cemento"));
@@ -178,3 +188,23 @@ export const CompleteDeliverySchema = z
   export const AttachDeliveryProofSchema = z.object({
   comment: z.string().optional(),
 }).optional().default({});
+
+export const GetOrdersQuerySchema = z
+  .object({
+    status: z.string().trim().optional(),
+    deliveryType: z.string().trim().optional(),
+    userId: z.string().trim().optional(),
+    sellerId: z.string().trim().optional(),
+    withoutTrip: z
+      .union([z.boolean(), z.string()])
+      .transform((val) => {
+        if (typeof val === "boolean") return val;
+        return val.toLowerCase() === "true";
+      })
+      .optional(),
+    search: z.string().trim().optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .optional()
+  .default({});

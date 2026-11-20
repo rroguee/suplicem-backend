@@ -17,7 +17,16 @@ export class UpdateUserStatusUseCase {
   ) {}
 
   async execute({ uid, status }: UpdateUserStatusDto, requesterUid?: string): Promise<void> {
-    if (requesterUid && requesterUid === uid && (status === "inactive" || status === "banned")) {
+    if (!requesterUid) {
+      throw new Error("No tienes permiso para cambiar el estado de un usuario");
+    }
+
+    const requester = await this.userRepo.getById(requesterUid);
+    if (!requester || requester.userType !== "admin" || requester.status !== "active") {
+      throw new Error("No tienes permiso para cambiar el estado de un usuario");
+    }
+
+    if (requesterUid === uid && (status === "inactive" || status === "banned")) {
       throw new Error("No puedes desactivar o suspender tu propia cuenta de administrador");
     }
 
@@ -29,6 +38,12 @@ export class UpdateUserStatusUseCase {
 
     const previousStatus = user.status;
     user.status = status;
+
+    // Generar código de conductor únicamente cuando el administrador aprueba la cuenta (pasa a activa)
+    if (user.userType === "driver" && status === "active" && !user.driverCode) {
+      user.driverCode = `COND-${uid.slice(0, 5).toUpperCase()}`;
+    }
+
     await this.userRepo.update(uid, user);
 
     // Sincronizar estado en Firebase Auth y revocar sesiones activas
@@ -43,22 +58,25 @@ export class UpdateUserStatusUseCase {
       return;
     }
 
-    // Si el administrador aprueba una cuenta nueva por primera vez (estado cambia de 'pending' a 'active'), enviar correo con el bot
+    // Si el administrador aprueba una cuenta nueva por primera vez (estado cambia de 'pending' a 'active'), enviar correo con el bot sin bloquear la respuesta HTTP
     if (
       status === "active" &&
       previousStatus === "pending" &&
       user.email &&
       user.notifications?.email !== false
     ) {
-      try {
-        await this.botService.sendAccountApprovedEmailBot(
+      this.botService
+        .sendAccountApprovedEmailBot(
           user.email,
           user.names || "Usuario",
           user.lastNames || ""
-        );
-      } catch (error: any) {
-        console.warn("[Email] No se pudo enviar el correo de aprobación:", error?.message || error);
-      }
+        )
+        .catch((err) => {
+          console.warn(
+            "[UpdateUserStatusUseCase] Error al enviar correo de aprobación:",
+            err?.message || err
+          );
+        });
     }
 
     await this.sendInAppStatusNotification(user, status, previousStatus);

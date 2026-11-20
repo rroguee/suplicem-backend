@@ -3,9 +3,15 @@ import { Trip } from "../entities/Trip";
 export interface TripRepository {
   create(trip: Trip): Promise<string>;
   createTripAtomic(trip: Trip, orderIds: string[]): Promise<string>;
+  createSplitTripsAtomic?(
+    orderId: string,
+    tripsToCreate: Trip[],
+    tripIdsToCancel: string[]
+  ): Promise<string[]>;
   getAvailable(driverId?: string): Promise<Trip[]>;
   getById(tripId: string): Promise<Trip | null>;
   getAll(): Promise<Trip[]>;
+  getActiveTrips?(): Promise<Trip[]>;
   getDriverTripHistory(userId: string): Promise<Trip[]>;
   getDriverActualTrips(userId: string): Promise<Trip[]>;
   assignDriver(tripId: string, driverId: string): Promise<void>;

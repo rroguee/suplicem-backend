@@ -2,13 +2,15 @@ import { Router } from "express";
 import { TripController } from "../controllers/TripController";
 import { authenticate } from "../middlewares/authenticate";
 import { requireRole } from "../middlewares/authorize";
-import { validate } from "../middlewares/validate";
+import { validate, validateQuery } from "../middlewares/validate";
 import {
   CreateTripSchema,
   UpdateTripStatusSchema,
   AcceptTripSchema,
   AssignTripDriverSchema,
   SplitOrderTripsSchema,
+  GetTripsQuerySchema,
+  GetTripDirectionsQuerySchema,
 } from "../schemas/tripSchemas";
 
 
@@ -95,6 +97,7 @@ export const tripRoutes = (router: Router) => {
     "/trips",
     authenticate,
     requireRole(["admin", "seller"]),
+    validateQuery(GetTripsQuerySchema),
     async (req, res) => {
       await tripController.getAll(req, res);
     }
@@ -138,6 +141,16 @@ export const tripRoutes = (router: Router) => {
     validate(AcceptTripSchema),
     async (req, res) => {
       await tripController.accept(req, res);
+    }
+  );
+
+  // 7.1 Obtener trazado de ruta vial optimizado (Estilo Uber)
+  router.get(
+    "/trips/directions",
+    authenticate,
+    validateQuery(GetTripDirectionsQuerySchema),
+    async (req, res) => {
+      await tripController.getDirections(req, res);
     }
   );
 

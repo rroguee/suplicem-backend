@@ -20,9 +20,11 @@ export interface CreateOrderDto {
   }[];
   paymentMethod?: "transfer" | "credit";  
   bankAccountId?: string;                 
+  bankReferenceNumber?: string;
   creditNote?: string;                    
   comments?: string;
   receiptImage?: string;
   idempotencyKey?: string;
   createdBySellerId?: string;
+  createdByAdminId?: string;
 }

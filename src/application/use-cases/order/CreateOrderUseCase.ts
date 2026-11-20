@@ -2,6 +2,7 @@ import { Order, OrderItem } from "../../../domain/entities/Order";
 import { OrderRepository } from "../../../domain/repositories/OrderRepository";
 import { ProductRepository } from "../../../domain/repositories/ProductRepository";
 import { IdempotencyRepository } from "../../../domain/repositories/IdempotencyRepository";
+import { GetDashboardSummaryUseCase } from "../dashboard/GetDashboardSummaryUseCase";
 import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { SynthIDDetectorService } from "../../../infrastructure/services/SynthIDDetectorService";
 import { TonnageCalculatorService } from "../../../domain/services/TonnageCalculatorService";
@@ -39,7 +40,18 @@ export class CreateOrderUseCase {
       }
     }
 
-    // 2. Análisis de riesgo del comprobante con IA
+    // 2. Validación de Unicidad de Referencia Bancaria (Prevención de comprobante reciclado / doble gasto)
+    const rawBankRef = (data.bankReferenceNumber || "").trim();
+    if (rawBankRef) {
+      const existingOrder = await this.orderRepo.findByBankReference(rawBankRef);
+      if (existingOrder) {
+        throw new Error(
+          `El número de comprobante/referencia bancaria "${rawBankRef}" ya fue registrado en el pedido #${existingOrder.orderNumber}. Verifica tu comprobante o contacta a soporte.`
+        );
+      }
+    }
+
+    // 3. Análisis de riesgo del comprobante con IA
     let aiRiskFlag = false;
     let aiRiskScore = 0;
     let aiRiskReason = "";
@@ -51,12 +63,12 @@ export class CreateOrderUseCase {
       aiRiskReason = analysis.reason;
     }
 
-    // 3. Validación y Tarificación de Productos delegada a OrderPricingService
+    // 4. Validación y Tarificación de Productos delegada a OrderPricingService
     if (!this.productRepo) {
       throw new Error("Repositorio de productos no disponible.");
     }
 
-    const isSellerAssisted = Boolean(data.createdBySellerId);
+    const isAssisted = Boolean(data.createdBySellerId || data.createdByAdminId);
     const validatedItems: OrderItem[] = [];
 
     for (const item of data.items) {
@@ -68,7 +80,7 @@ export class CreateOrderUseCase {
       const validatedItem = this.pricingService.validateAndCalculateItem(
         product,
         item.quantity,
-        isSellerAssisted
+        isAssisted
       );
       validatedItems.push(validatedItem);
     }
@@ -88,7 +100,7 @@ export class CreateOrderUseCase {
 
       // Aplicar políticas de negocio (SRP: Cartera de vendedor y elegibilidad de crédito)
       this.policyValidator.validateSellerPortfolio(client, data.createdBySellerId);
-      this.policyValidator.validateCreditEligibility(client, data.paymentMethod);
+      this.policyValidator.validateCreditEligibility(client, data.paymentMethod, Boolean(data.createdByAdminId));
 
       if (client) {
         userPhone = client.phone || "";
@@ -114,6 +126,7 @@ export class CreateOrderUseCase {
       userId: data.userId,
       sellerId: assignedSellerId,
       createdBySellerId: data.createdBySellerId,
+      createdByAdminId: data.createdByAdminId,
       userPhone,
       userNames,
       userLastNames,
@@ -132,6 +145,7 @@ export class CreateOrderUseCase {
       items: validatedItems,
       paymentMethod: data.paymentMethod,
       bankAccountId: data.bankAccountId,
+      bankReferenceNumber: rawBankRef || undefined,
       creditNote: data.creditNote,
       comments: data.comments || "",
       receiptImage: data.receiptImage,
@@ -158,6 +172,8 @@ export class CreateOrderUseCase {
     if (data.idempotencyKey && this.idempotencyRepo) {
       await this.idempotencyRepo.complete(data.idempotencyKey, data.userId, result);
     }
+
+    GetDashboardSummaryUseCase.invalidateCache();
 
     return result;
   }

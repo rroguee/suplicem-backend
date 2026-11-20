@@ -2,8 +2,15 @@ import { firestore } from "../../config/firebase";
 import { Order } from "../../domain/entities/Order";
 import { OrderRepository, OrderFilters } from "../../domain/repositories/OrderRepository";
 import { FieldPath } from "firebase-admin/firestore";
+import { TtlCache } from "../cache/TtlCache";
 
 export class OrderFirestoreRepository implements OrderRepository {
+  private static readonly orderByIdCache = new TtlCache<Order | null>(15_000, 200);
+
+  public static invalidateCache(orderId?: string): void {
+    OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
+  }
+
   async create(
     order: Order
   ): Promise<{ orderId: string; orderNumber: number }> {
@@ -20,14 +27,6 @@ export class OrderFirestoreRepository implements OrderRepository {
       .where("userId", "==", userId)
       .get();
 
-    let userDocData: any = null;
-    try {
-      const uDoc = await firestore.collection("users").doc(userId).get();
-      if (uDoc.exists) userDocData = uDoc.data();
-    } catch (e) {
-      console.warn("Error obteniendo usuario para getByUser:", e);
-    }
-
     return snapshot.docs.map((doc) => {
       const data = doc.data();
       const fallbackDeliveryAddress =
@@ -39,43 +38,63 @@ export class OrderFirestoreRepository implements OrderRepository {
         id: doc.id,
         ...data,
         deliveryAddress: fallbackDeliveryAddress,
-        userPhone: data.userPhone || userDocData?.phone || "",
-        userNames: data.userNames || userDocData?.names || "",
-        userLastNames: data.userLastNames || userDocData?.lastNames || "",
-        userEmail: data.userEmail || userDocData?.email || "",
+        userPhone: data.userPhone || "",
+        userNames: data.userNames || "",
+        userLastNames: data.userLastNames || "",
+        userEmail: data.userEmail || "",
       } as Order;
     });
   }
 
   async getById(orderId: string): Promise<Order | null> {
-    const doc = await firestore.collection("orders").doc(orderId).get();
-    if (!doc.exists) return null;
-    const orderData = { id: doc.id, ...doc.data() } as Order;
+    if (!orderId || typeof orderId !== "string" || !orderId.trim()) return null;
 
-    if (!orderData.deliveryAddress && orderData.deliveries && orderData.deliveries.length > 0) {
-      orderData.deliveryAddress = orderData.deliveries[0].address;
-    }
+    return OrderFirestoreRepository.orderByIdCache.getOrLoad(orderId, async () => {
+      const doc = await firestore.collection("orders").doc(orderId).get();
+      if (!doc.exists) return null;
+      const orderData = { id: doc.id, ...doc.data() } as Order;
 
-    if (orderData.userId) {
-      try {
-        const userDoc = await firestore
-          .collection("users")
-          .doc(orderData.userId)
-          .get();
-        if (userDoc.exists) {
-          const u = userDoc.data();
-          orderData.userPhone = u?.phone || orderData.userPhone || "";
-          orderData.userNames = u?.names || orderData.userNames || "";
-          orderData.userLastNames = u?.lastNames || orderData.userLastNames || "";
-          orderData.userEmail = u?.email || orderData.userEmail || "";
-          orderData.clientAddresses = u?.addresses || [];
-        }
-      } catch (e) {
-        console.warn(`Error al enriquecer orden ${orderId} con datos del usuario:`, e);
+      if (!orderData.deliveryAddress && orderData.deliveries && orderData.deliveries.length > 0) {
+        orderData.deliveryAddress = orderData.deliveries[0].address;
       }
-    }
 
-    return orderData;
+      if (orderData.userId) {
+        try {
+          const userDoc = await firestore
+            .collection("users")
+            .doc(orderData.userId)
+            .get();
+          if (userDoc.exists) {
+            const u = userDoc.data();
+            orderData.userPhone = u?.phone || orderData.userPhone || "";
+            orderData.userNames = u?.names || orderData.userNames || "";
+            orderData.userLastNames = u?.lastNames || orderData.userLastNames || "";
+            orderData.userEmail = u?.email || orderData.userEmail || "";
+            orderData.clientAddresses = u?.addresses || [];
+          }
+        } catch (e) {
+          console.warn(`Error al enriquecer orden ${orderId} con datos del usuario:`, e);
+        }
+      }
+
+      return orderData;
+    });
+  }
+
+  async findByBankReference(bankReference: string): Promise<Order | null> {
+    const cleanRef = (bankReference || "").trim();
+    if (!cleanRef) return null;
+
+    const snapshot = await firestore
+      .collection("orders")
+      .where("bankReferenceNumber", "==", cleanRef)
+      .where("status", "in", ["pending", "approved", "completed"])
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { ...(doc.data() as Order), id: doc.id };
   }
 
   async getAll(filters?: OrderFilters | string): Promise<Order[]> {
@@ -100,7 +119,14 @@ export class OrderFirestoreRepository implements OrderRepository {
       query = query.where("sellerId", "==", parsedFilters.sellerId);
     }
 
-    const snapshot = await query.get();
+    const limitCount = parsedFilters.limit ? Math.min(parsedFilters.limit, 300) : 200;
+    let snapshot: FirebaseFirestore.QuerySnapshot;
+    try {
+      snapshot = await query.orderBy("createdAt", "desc").limit(limitCount).get();
+    } catch {
+      // Fallback seguro en caso de que falte un índice compuesto específico
+      snapshot = await query.limit(limitCount).get();
+    }
 
     const rawOrders: Order[] = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -110,40 +136,56 @@ export class OrderFirestoreRepository implements OrderRepository {
     const userIdsToFetch = [
       ...new Set(
         rawOrders
-          .filter((o) => o.userId && (!o.userPhone || !o.userNames))
+          .filter((o) => o.userId && (!o.userPhone || !o.userNames || !o.userLastNames))
           .map((o) => o.userId)
       ),
     ];
 
     const userMap = new Map<string, any>();
     if (userIdsToFetch.length > 0) {
+      const userChunks: string[][] = [];
       for (let i = 0; i < userIdsToFetch.length; i += 10) {
-        const chunk = userIdsToFetch.slice(i, i + 10);
-        try {
-          const uSnap = await firestore
-            .collection("users")
-            .where(FieldPath.documentId(), "in", chunk)
-            .get();
-          uSnap.docs.forEach((uDoc) => userMap.set(uDoc.id, uDoc.data()));
-        } catch (e) {
-          console.warn("Error fetching users for orders enrichment:", e);
-        }
+        userChunks.push(userIdsToFetch.slice(i, i + 10));
       }
+      await Promise.all(
+        userChunks.map(async (chunk) => {
+          try {
+            const uSnap = await firestore
+              .collection("users")
+              .where(FieldPath.documentId(), "in", chunk)
+              .get();
+            uSnap.docs.forEach((uDoc) => userMap.set(uDoc.id, uDoc.data()));
+          } catch (e) {
+            console.warn("Error fetching users for orders enrichment:", e);
+          }
+        })
+      );
     }
 
-    // Pre-cargar viajes en una única consulta para evitar consultas N+1 hacia Firestore
+    // Solo consultar viajes si alguna orden no tiene tripId o si se filtró por withoutTrip
     const orderToTripMap = new Map<string, string>();
-    try {
-      const tripsSnap = await firestore.collection("trips").get();
-      tripsSnap.docs.forEach((tripDoc) => {
-        const tripData = tripDoc.data();
-        const orderIds: string[] = tripData.orderIds || [];
-        orderIds.forEach((orderId) => {
-          orderToTripMap.set(orderId, tripDoc.id);
+    const needsTripMap =
+      Boolean(parsedFilters.withoutTrip) || rawOrders.some((o) => !o.tripId);
+
+    if (needsTripMap && rawOrders.length > 0) {
+      try {
+        // Optimización Anti-Bottleneck: Filtrar únicamente viajes activos en lugar de escanear toda la colección histórica
+        const tripsSnap = await firestore
+          .collection("trips")
+          .where("status", "in", ["available", "assigned", "started", "in_progress"])
+          .select("orderIds")
+          .get();
+
+        tripsSnap.docs.forEach((tripDoc) => {
+          const tripData = tripDoc.data();
+          const orderIds: string[] = tripData.orderIds || [];
+          orderIds.forEach((orderId) => {
+            orderToTripMap.set(orderId, tripDoc.id);
+          });
         });
-      });
-    } catch (tripsBatchError) {
-      console.warn("Advertencia al precargar mapa de viajes para órdenes:", tripsBatchError);
+      } catch (tripsBatchError) {
+        console.warn("Advertencia al precargar mapa de viajes para órdenes:", tripsBatchError);
+      }
     }
 
     let ordersWithTrip = rawOrders.map((orderData) => {
@@ -231,6 +273,7 @@ export class OrderFirestoreRepository implements OrderRepository {
     }
 
     await firestore.collection("orders").doc(orderId).update(updateData);
+    OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
   }
 
     async markDeliveryAsCompleted(orderId: string, index: number): Promise<void> {
@@ -259,6 +302,7 @@ export class OrderFirestoreRepository implements OrderRepository {
         updatedAt: new Date().toISOString(),
       });
     });
+    OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
   }
 
   async completeDelivery(
@@ -298,6 +342,7 @@ export class OrderFirestoreRepository implements OrderRepository {
         updatedAt: new Date().toISOString(),
       });
     });
+    OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
   }
 
   async attachDeliveryProof(
@@ -335,6 +380,7 @@ export class OrderFirestoreRepository implements OrderRepository {
         updatedAt: new Date().toISOString(),
       });
     });
+    OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
   }
 
   async updateDeliveries(
@@ -485,6 +531,7 @@ export class OrderFirestoreRepository implements OrderRepository {
         deliveries: finalDeliveries,
         updatedAt: new Date().toISOString(),
       });
+      OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
       return {
         id: orderSnap.id,
         ...orderData,
@@ -499,5 +546,6 @@ export class OrderFirestoreRepository implements OrderRepository {
       receiptImage,
       updatedAt: new Date().toISOString(),
     });
+    OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
   }
 }

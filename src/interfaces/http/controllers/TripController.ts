@@ -19,12 +19,15 @@ import { SplitSingleTripUseCase } from "../../../application/use-cases/trip/Spli
 import { UserFirestoreRepository } from "../../../infrastructure/firestore/UserFirestoreRepository";
 import { NotificationFirestoreRepository } from "../../../infrastructure/firestore/NotificationFirestoreRepository";
 import { NotificationDispatcherService } from "../../../application/services/NotificationDispatcherService";
+import { GetTripDirectionsUseCase } from "../../../application/use-cases/trip/GetTripDirectionsUseCase";
+import { HttpRouteService } from "../../../infrastructure/services/HttpRouteService";
 
 const tripRepo = new TripFirestoreRepository();
 const orderRepo = new OrderFirestoreRepository();
 const userRepo = new UserFirestoreRepository();
 const notificationRepo = new NotificationFirestoreRepository();
 const notificationDispatcher = new NotificationDispatcherService(notificationRepo);
+const routeService = new HttpRouteService();
 
 export class TripController {
   constructor(
@@ -32,7 +35,7 @@ export class TripController {
     private getAvailableTripsUseCase = new GetAvailableTripsUseCase(tripRepo, userRepo),
     private getDriverTripHistoryUseCase = new GetDriverTripHistoryUseCase(tripRepo),
     private getDriverActualTripsUseCase = new GetDriverActualTripsUseCase(tripRepo),
-    private getAllTripsUseCase = new GetAllTripsUseCase(tripRepo),
+    private getAllTripsUseCase = new GetAllTripsUseCase(tripRepo, orderRepo),
     private acceptTripUseCase = new AcceptTripUseCase(tripRepo, userRepo),
     private getTripDetailsUseCase = new GetTripDetailsUseCase(tripRepo),
     private getTripByOrderIdUseCase = new GetTripByOrderIdUseCase(tripRepo),
@@ -42,7 +45,8 @@ export class TripController {
     private getDriverActiveTripUseCase = new GetDriverActiveTripUseCase(tripRepo),
     private assignTripDriverUseCase = new AssignTripDriverUseCase(tripRepo, userRepo),
     private splitOrderTripsUseCase = new SplitOrderTripsUseCase(tripRepo, orderRepo, userRepo),
-    private splitSingleTripUseCase = new SplitSingleTripUseCase(tripRepo, orderRepo, userRepo)
+    private splitSingleTripUseCase = new SplitSingleTripUseCase(tripRepo, orderRepo, userRepo),
+    private getTripDirectionsUseCase = new GetTripDirectionsUseCase(routeService)
   ) {}
 
 
@@ -70,22 +74,29 @@ export class TripController {
   async getAll(req: Request, res: Response) {
     try {
       const authUser = (req as any).user;
-      let trips = await this.getAllTripsUseCase.execute();
+      const q = (req as any).validatedQuery || req.query;
+      const { status, search, page, limit } = q;
+      const isPaginatedRequest =
+        page !== undefined ||
+        limit !== undefined ||
+        (typeof search === "string" && search.trim() !== "") ||
+        (typeof status === "string" && status.trim() !== "");
 
-      // 🛡️ Regla de Seguridad de Cartera:
-      // Si quien consulta es un vendedor, SOLO puede ver viajes asociados a las órdenes de sus clientes
-      if (authUser?.userType === "seller") {
-        const sellerOrders = await orderRepo.getAll({ sellerId: authUser.uid });
-        const sellerOrderIds = new Set<string>();
-        sellerOrders.forEach((o) => {
-          if (o.id) sellerOrderIds.add(o.id);
-          if (o.orderNumber !== undefined) sellerOrderIds.add(String(o.orderNumber));
+      if (isPaginatedRequest) {
+        const result = await this.getAllTripsUseCase.executePaginated({
+          actorUid: authUser?.uid,
+          actorUserType: authUser?.userType,
+          status: typeof status === "string" ? status : undefined,
+          search: typeof search === "string" ? search : undefined,
+          page: page !== undefined ? Number(page) : undefined,
+          limit: limit !== undefined ? Number(limit) : undefined,
         });
-
-        trips = trips.filter((t) =>
-          (t.orderIds || []).some((id) => sellerOrderIds.has(id))
-        );
+        return res.status(200).json({ success: true, ...result });
       }
+
+      const trips = await this.getAllTripsUseCase.execute(
+        authUser?.uid ? { uid: authUser.uid, userType: authUser.userType } : undefined
+      );
 
       res.status(200).json({ success: true, trips });
     } catch (error: any) {
@@ -249,6 +260,22 @@ export class TripController {
       res.status(400).json({
         success: false,
         message: error.message || "Error al fraccionar el viaje",
+      });
+    }
+  }
+
+  async getDirections(req: Request, res: Response) {
+    try {
+      const { originLat, originLng, destLat, destLng } = req.query as any;
+      const directions = await this.getTripDirectionsUseCase.execute(
+        { latitude: Number(originLat), longitude: Number(originLng) },
+        { latitude: Number(destLat), longitude: Number(destLng) }
+      );
+      res.status(200).json({ success: true, data: directions });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message || "Error al obtener la ruta",
       });
     }
   }

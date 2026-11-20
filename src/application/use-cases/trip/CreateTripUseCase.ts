@@ -3,6 +3,7 @@ import { TripRepository } from "../../../domain/repositories/TripRepository";
 import { OrderRepository } from "../../../domain/repositories/OrderRepository";
 import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { selectBestDriver } from "../../../domain/services/DriverAssignmentService";
+import { GetDashboardSummaryUseCase } from "../dashboard/GetDashboardSummaryUseCase";
 
 export class CreateTripUseCase {
   constructor(
@@ -106,11 +107,11 @@ export class CreateTripUseCase {
     // candidato activo con capacidad disponible para la carga calculada.
     let resolvedDriverId = (data.driverId || "").trim();
     if (!resolvedDriverId && this.userRepo) {
-      const [drivers, allTrips] = await Promise.all([
+      const [drivers, activeTrips] = await Promise.all([
         this.userRepo.getAll({ status: "active", userType: "driver" }),
-        this.tripRepo.getAll(),
+        this.tripRepo.getActiveTrips ? this.tripRepo.getActiveTrips() : this.tripRepo.getAll(),
       ]);
-      resolvedDriverId = selectBestDriver(drivers, allTrips, calculatedTotalTons) || "";
+      resolvedDriverId = selectBestDriver(drivers, activeTrips, calculatedTotalTons) || "";
     }
 
     // Si se asignó un conductor, limitar a la capacidad de su camión si es menor
@@ -147,6 +148,8 @@ export class CreateTripUseCase {
       deliveryPin: generatedPin,
     };
 
-    return await this.tripRepo.createTripAtomic(newTrip, uniqueOrderIds);
+    const tripId = await this.tripRepo.createTripAtomic(newTrip, uniqueOrderIds);
+    GetDashboardSummaryUseCase.invalidateCache();
+    return tripId;
   }
 }

@@ -40,6 +40,7 @@ export interface Order {
   items: OrderItem[];
   paymentMethod?: "transfer" | "credit"; 
   bankAccountId?: string; 
+  bankReferenceNumber?: string;
   creditNote?: string;
   comments?: string;
   receiptImage?: string;
@@ -59,5 +60,5 @@ export interface Order {
   aiRiskReason?: string;
   sellerId?: string;
   createdBySellerId?: string;
-  
+  createdByAdminId?: string;
 }
