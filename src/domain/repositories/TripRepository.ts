@@ -30,4 +30,5 @@ export interface TripRepository {
     deliveryPin?: string;
   } | null>;
   getTripsByOrderId(orderId: string): Promise<Trip[]>;
+  updateTripPin?(tripId: string, deliveryPin: string): Promise<void>;
 }

@@ -1,5 +1,5 @@
 import { ProductRepository } from "../../../domain/repositories/ProductRepository";
-import { deleteStorageFile } from "../../../domain/services/ImageStorageService";
+import { deleteStorageFile } from "../../../infrastructure/services/ImageStorageService";
 
 export class DeleteProductUseCase {
   constructor(private productRepo: ProductRepository) {}

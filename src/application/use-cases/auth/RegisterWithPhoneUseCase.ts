@@ -10,7 +10,7 @@ import {
 } from "../../../domain/services/IdentityVerificationService";
 import { isValidRnc, normalizeTaxId } from "../../../domain/services/TaxIdService";
 import { User } from "../../../domain/entities/User";
-import { uploadIdentificationImage } from "../../../domain/services/ImageStorageService";
+import { uploadIdentificationImage } from "../../../infrastructure/services/ImageStorageService";
 
 const MAX_ATTEMPTS = 5;
 

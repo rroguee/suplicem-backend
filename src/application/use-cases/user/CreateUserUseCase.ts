@@ -6,7 +6,7 @@ import { AuthService } from "../../../domain/services/AuthService";
 import { RegistrationBotService } from "../../../infrastructure/services/RegistrationBotService";
 import { SynthIDDetectorService } from "../../../infrastructure/services/SynthIDDetectorService";
 import { ApplicationActor, CreateUserDto } from "../../dtos/UserDtos";
-import { uploadIdentificationImage, deleteStorageFile } from "../../../domain/services/ImageStorageService";
+import { uploadIdentificationImage, deleteStorageFile } from "../../../infrastructure/services/ImageStorageService";
 import { NotificationDispatcherService } from "../../services/NotificationDispatcherService";
 
 export class CreateUserUseCase {

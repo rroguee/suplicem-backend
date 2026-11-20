@@ -390,124 +390,24 @@ export class OrderFirestoreRepository implements OrderRepository {
   ): Promise<any> {
     return await firestore.runTransaction(async (transaction) => {
       const orderRef = firestore.collection("orders").doc(orderId);
-
-      // Recolectar userUids para direcciones secundarias
-      const userUids = [
-        ...new Set(
-          deliveries
-            .map((d: any) => d.address?.userUid)
-            .filter(
-              (uid: string) => uid && typeof uid === "string" && !uid.startsWith("new-user-")
-            )
-        ),
-      ] as string[];
-
-      const userRefs = userUids.map((uid) =>
-        firestore.collection("users").doc(uid)
-      );
-
-      // 1. Ejecutar TODAS las lecturas primero (orden y usuarios)
       const orderSnap = await transaction.get(orderRef);
-      const userSnaps = await Promise.all(
-        userRefs.map((ref) => transaction.get(ref))
-      );
 
       if (!orderSnap.exists) {
         throw new Error("Orden no encontrada");
       }
 
       const orderData = orderSnap.data() as any;
-      const items = orderData.items || [];
-
-      // Mapear cantidad pedida por producto
-      const orderedQuantities = new Map<string, number>();
-      items.forEach((item: any) => {
-        orderedQuantities.set(item.productId, Number(item.quantity) || 0);
-      });
-
-      // Mapear cantidad ya entregada en entregas previas
-      const deliveredQuantities = new Map<string, number>();
       const existingDeliveries = orderData.deliveries || [];
-      existingDeliveries.forEach((del: any) => {
-        if (del.status === "delivered" || del.delivered === true) {
-          const current = deliveredQuantities.get(del.productId) || 0;
-          deliveredQuantities.set(
-            del.productId,
-            current + (Number(del.quantity) || 0)
-          );
-        }
-      });
 
-       // Identificar entregas ya completadas (historial inmutable con evidencias y comentarios)
+      // Conservar las entregas históricas ya completadas (inmutables)
       const completedDeliveries = existingDeliveries.filter(
         (del: any) => del.status === "delivered" || del.delivered === true
       );
       const completedIds = new Set(
         completedDeliveries.map((d: any) => d.id).filter(Boolean)
       );
-      // Mapear únicamente las asignaciones nuevas o pendientes solicitadas (excluyendo lo ya completado)
-      const requestedQuantities = new Map<string, number>();
-      for (const del of deliveries) {
-        if (completedIds.has(del.id) || del.status === "delivered" || del.delivered === true) {
-          continue;
-        }
-        if (!del.productId) {
-          throw new Error("Cada entrega debe especificar un producto válido.");
-        }
-        const qty = Number(del.quantity) || 0;
-        const current = requestedQuantities.get(del.productId) || 0;
-        requestedQuantities.set(del.productId, current + qty);
-      }
 
-      for (const [productId, requestedQty] of requestedQuantities.entries()) {
-        const pedida = orderedQuantities.get(productId) || 0;
-        const entregada = deliveredQuantities.get(productId) || 0;
-        const reservadaActiva = 0;
-        const disponible = pedida - (entregada + reservadaActiva);
-        if (requestedQty > disponible) {
-          const item = items.find((i: any) => i.productId === productId);
-          const productName = item?.name || "el producto";
-          throw new Error(
-            `La cantidad asignada (${requestedQty}) para ${productName} supera la disponibilidad real (${disponible}).`
-          );
-        }
-      }
-
-      // 2. Ejecutar TODAS las escrituras después de las lecturas
-      for (let i = 0; i < userSnaps.length; i++) {
-        const userSnap = userSnaps[i];
-        if (userSnap.exists) {
-          const userData = userSnap.data();
-          const existingAddresses = userData?.addresses || [];
-          const userUid = userUids[i];
-          const newAddresses = deliveries
-            .map((d: any) => d.address)
-            .filter(
-              (a: any) =>
-                a &&
-                a.userUid === userUid &&
-                a.placeId &&
-                !a.placeId.startsWith("new-")
-            );
-
-          let updatedAddresses = [...existingAddresses];
-          let updated = false;
-
-          for (const addr of newAddresses) {
-            if (
-              !updatedAddresses.some((a: any) => a.placeId === addr.placeId)
-            ) {
-              updatedAddresses.push(addr);
-              updated = true;
-            }
-          }
-
-          if (updated) {
-            transaction.update(userRefs[i], { addresses: updatedAddresses });
-          }
-        }
-      }
-
+      // Normalizar las nuevas entregas pendientes asignadas
       const sanitizedPendingDeliveries = deliveries
         .filter(
           (del: any) =>
@@ -526,12 +426,15 @@ export class OrderFirestoreRepository implements OrderRepository {
         }));
 
       const finalDeliveries = [...completedDeliveries, ...sanitizedPendingDeliveries];
+
       transaction.update(orderRef, {
         deliveryType,
         deliveries: finalDeliveries,
         updatedAt: new Date().toISOString(),
       });
+
       OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
+
       return {
         id: orderSnap.id,
         ...orderData,

@@ -32,13 +32,6 @@ export class TripFirestoreRepository implements TripRepository {
         if (!snap.exists) {
           throw new Error(`La orden con ID ${orderId} no fue encontrada.`);
         }
-
-        const orderData = snap.data();
-        if (orderData?.status !== "approved") {
-          throw new Error(`La orden #${orderData?.orderNumber || orderId} no está aprobada.`);
-        }
-
-        // Nota: La validación de balance y despachos simultáneos vive en CreateTripUseCase
       }
 
       // 2. Crear documento de viaje
@@ -278,13 +271,6 @@ export class TripFirestoreRepository implements TripRepository {
       if (!tripDoc.exists) throw new Error("El viaje solicitado no existe");
 
       const tripData = tripDoc.data();
-      const assignableStatuses = ["available", "assigned", "accepted", "canceled"];
-      if (!assignableStatuses.includes(tripData?.status)) {
-        throw new Error(
-          `El viaje ${tripData?.tripNumber || tripId} no está disponible para asignación (estado: ${tripData?.status}).`
-        );
-      }
-
       const nowIso = new Date().toISOString();
       const tripUpdatePayload: any = {
         status: "accepted",
@@ -325,15 +311,9 @@ export class TripFirestoreRepository implements TripRepository {
       if (!tripDoc.exists) throw new Error("El viaje solicitado no existe");
 
       const tripData = tripDoc.data();
-      if (tripData?.status !== "available" && tripData?.status !== "assigned") {
-        if (tripData?.status === "accepted" && (tripData?.assignedDriverId === driverId || tripData?.driverId === driverId)) {
-          return;
-        }
-        throw new Error(`El viaje ${tripData?.tripNumber || tripId} ya fue tomado por otro conductor.`);
-      }
-
-      if (tripData?.assignedDriverId && tripData.assignedDriverId !== "" && tripData.assignedDriverId !== driverId) {
-        throw new Error("Este viaje fue asignado específicamente a otro conductor");
+      // Idempotencia: si el viaje ya fue aceptado por este mismo chofer, no genera error
+      if (tripData?.status === "accepted" && (tripData?.assignedDriverId === driverId || tripData?.driverId === driverId)) {
+        return;
       }
 
       transaction.update(tripRef, {
@@ -541,5 +521,10 @@ export class TripFirestoreRepository implements TripRepository {
       .filter((trip: any) => ["accepted", "started", "in_progress"].includes(trip.status)) as Trip[];
 
     return trips.length > 0 ? trips[0] : null;
+  }
+
+  async updateTripPin(tripId: string, deliveryPin: string): Promise<void> {
+    await firestore.collection("trips").doc(tripId).update({ deliveryPin });
+    TripFirestoreRepository.invalidateCache(tripId);
   }
 }

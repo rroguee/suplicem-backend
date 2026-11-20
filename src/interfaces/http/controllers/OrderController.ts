@@ -8,7 +8,8 @@ import { MarkDeliveryCompletedUseCase } from "../../../application/use-cases/ord
 import { UpdateOrderDeliveriesUseCase } from "../../../application/use-cases/order/UpdateOrderDeliveriesUseCase";
 import { AttachDeliveryProofUseCase } from "../../../application/use-cases/order/AttachDeliveryProofUseCase";
 import { UpdateOrderReceiptUseCase } from "../../../application/use-cases/order/UpdateOrderReceiptUseCase";
-import { uploadDeliveryImage, uploadReceiptImage } from "../../../domain/services/ImageStorageService";
+import { GetOrderDispatchPlanUseCase } from "../../../application/use-cases/order/GetOrderDispatchPlanUseCase";
+import { uploadDeliveryImage, uploadReceiptImage } from "../../../infrastructure/services/ImageStorageService";
 import { GetOrderByIdUseCase } from "../../../application/use-cases/order/GetOrderByIdUseCase";
 import { UserFirestoreRepository } from "../../../infrastructure/firestore/UserFirestoreRepository";
 import { GetOrderTrackingUseCase } from "../../../application/use-cases/order/GetOrderTrackingUseCase";
@@ -49,7 +50,8 @@ export class OrderController {
     private markDeliveryCompletedUseCase = new MarkDeliveryCompletedUseCase(orderRepo, tripRepo, userRepo, notificationDispatcher),
     private attachDeliveryProofUseCase = new AttachDeliveryProofUseCase(orderRepo, tripRepo),
     private updateOrderDeliveriesUseCase = new UpdateOrderDeliveriesUseCase(orderRepo),
-    private updateOrderReceiptUseCase = new UpdateOrderReceiptUseCase(orderRepo)
+    private updateOrderReceiptUseCase = new UpdateOrderReceiptUseCase(orderRepo),
+    private getOrderDispatchPlanUseCase = new GetOrderDispatchPlanUseCase(orderRepo)
   ) {}
     async create(req: Request, res: Response) {
     try {
@@ -350,6 +352,19 @@ export class OrderController {
         ? 404
         : 500;
       res.status(statusCode).json({ success: false, message: error.message || "Error al actualizar el comprobante" });
+    }
+  }
+
+  async getDispatchPlan(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const plan = await this.getOrderDispatchPlanUseCase.execute(id);
+      return res.status(200).json({ success: true, plan });
+    } catch (error: any) {
+      return res.status(error.statusCode || 400).json({
+        success: false,
+        message: error.message || "Error al calcular el plan de despacho",
+      });
     }
   }
 }

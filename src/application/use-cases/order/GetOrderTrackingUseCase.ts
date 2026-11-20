@@ -157,10 +157,8 @@ export class GetOrderTrackingUseCase {
       if (!tripPin) {
         tripPin = Math.floor(1000 + Math.random() * 9000).toString();
         t.deliveryPin = tripPin;
-        if (t.id) {
-          import("../../../config/firebase").then(({ firestore }) => {
-            firestore.collection("trips").doc(t.id).update({ deliveryPin: tripPin }).catch(() => {});
-          }).catch(() => {});
+        if (t.id && this.tripRepo.updateTripPin) {
+          this.tripRepo.updateTripPin(t.id, tripPin).catch(() => {});
         }
       }
 

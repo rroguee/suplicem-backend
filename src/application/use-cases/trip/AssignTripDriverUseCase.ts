@@ -15,6 +15,18 @@ export class AssignTripDriverUseCase {
       throw new Error("El ID del conductor es obligatorio");
     }
 
+    const trip = await this.tripRepo.getById(tripId);
+    if (!trip) {
+      throw new Error("El viaje solicitado no existe");
+    }
+
+    const assignableStatuses = ["available", "assigned", "accepted", "canceled"];
+    if (!assignableStatuses.includes(trip.status)) {
+      throw new Error(
+        `El viaje ${trip.tripNumber || tripId} no está disponible para asignación (estado: ${trip.status}).`
+      );
+    }
+
     if (this.userRepo) {
       const driver = await this.userRepo.getById(driverId);
       if (!driver || driver.userType !== "driver") {

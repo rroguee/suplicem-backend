@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { uploadProductImage } from "../../../domain/services/ImageStorageService";
+import { uploadProductImage } from "../../../infrastructure/services/ImageStorageService";
 import { ProductFirestoreRepository } from "../../../infrastructure/firestore/ProductFirestoreRepository";
 import { CreateProductUseCase } from "../../../application/use-cases/product/CreateProductUseCase";
 import { GetAllProductsUseCase } from "../../../application/use-cases/product/GetAllProductsUseCase";

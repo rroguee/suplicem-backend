@@ -57,6 +57,16 @@ export const orderRoutes = (router: Router) => {
     }
   );
 
+  // 3.1. Obtener plan sugerido de despacho (Administradores)
+  router.get(
+    "/orders/:id/dispatch-plan",
+    authenticate,
+    requireRole(["admin"]),
+    async (req, res) => {
+      await orderController.getDispatchPlan(req, res);
+    }
+  );
+
   // 4. Ver orden por ID (Cualquier usuario autenticado involucrado)
   router.get("/orders/:id", authenticate, async (req, res) => {
     await orderController.getById(req, res);
