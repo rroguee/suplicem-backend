@@ -5,6 +5,7 @@ export interface UserFilters {
   userType?: string;
   aiRiskFlag?: boolean;
   sellerId?: string;
+  limit?: number;
 }
 
 export interface UserRepository {
@@ -13,4 +14,5 @@ export interface UserRepository {
   getById(uid: string): Promise<User | null>;
   getByPhone(phone: string): Promise<User | null>;
   getAll(filters?: UserFilters): Promise<User[]>;
+  count?(filters?: UserFilters): Promise<number>;
 }

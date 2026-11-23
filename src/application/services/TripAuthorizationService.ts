@@ -46,8 +46,12 @@ export class TripAuthorizationService {
     // Si es cliente o vendedor, verificamos si alguna orden del viaje le pertenece
     if (!trip.orderIds || trip.orderIds.length === 0) return false;
 
-    for (const orderId of trip.orderIds) {
-      const order = await this.orderRepo.getById(orderId);
+    // Resolver todas las órdenes en paralelo con Promise.all
+    const orders = await Promise.all(
+      trip.orderIds.map((orderId) => this.orderRepo.getById(orderId))
+    );
+
+    for (const order of orders) {
       if (!order) continue;
 
       if (user.userType === "client" && (order.userId === user.uid || (order as any).userUid === user.uid)) {

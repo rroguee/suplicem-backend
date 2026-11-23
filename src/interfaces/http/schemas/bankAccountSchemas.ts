@@ -1,6 +1,16 @@
 import { z } from "zod";
 
-const accountTypeEnum = z.enum(["savings", "checking", "current"]);
+const accountTypeEnum = z.preprocess((val) => {
+  if (typeof val === "string") {
+    const lower = val.toLowerCase().trim();
+    if (lower.includes("ahorro")) return "savings";
+    if (lower.includes("corriente")) return "current";
+    if (lower === "checking") return "checking";
+    if (lower === "savings") return "savings";
+    if (lower === "current") return "current";
+  }
+  return val;
+}, z.enum(["savings", "checking", "current"]));
 
 export const CreateBankAccountSchema = z.object({
   bankName: z.string().min(1, "El nombre del banco es requerido"),

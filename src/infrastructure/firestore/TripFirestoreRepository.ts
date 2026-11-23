@@ -1,6 +1,6 @@
 import { firestore } from "../../config/firebase";
 import { Trip } from "../../domain/entities/Trip";
-import { TripRepository } from "../../domain/repositories/TripRepository";
+import { TripRepository, TripFilters } from "../../domain/repositories/TripRepository";
 import { TripQueryService } from "./TripQueryService";
 import { TtlCache } from "../cache/TtlCache";
 
@@ -200,8 +200,33 @@ export class TripFirestoreRepository implements TripRepository {
     return trips;
   }
 
-  async getAll(): Promise<Trip[]> {
-    const snapshot = await firestore.collection("trips").get();
+  async getAll(filters?: TripFilters | string): Promise<Trip[]> {
+    let query: FirebaseFirestore.Query = firestore.collection("trips");
+
+    const parsedFilters: TripFilters =
+      typeof filters === "string"
+        ? (filters && filters !== "undefined" ? { status: filters } : {})
+        : filters || {};
+
+    if (parsedFilters.status && parsedFilters.status !== "undefined" && parsedFilters.status !== "Todos") {
+      query = query.where("status", "==", parsedFilters.status);
+    }
+    if (parsedFilters.assignedDriverId) {
+      query = query.where("assignedDriverId", "==", parsedFilters.assignedDriverId);
+    }
+    if (parsedFilters.driverId) {
+      query = query.where("driverId", "==", parsedFilters.driverId);
+    }
+
+    const limitCount = parsedFilters.limit ? Math.min(parsedFilters.limit, 300) : 200;
+    let snapshot: FirebaseFirestore.QuerySnapshot;
+    try {
+      snapshot = await query.orderBy("createdAt", "desc").limit(limitCount).get();
+    } catch {
+      // Fallback seguro en caso de que falte un índice compuesto específico en Firestore
+      snapshot = await query.limit(limitCount).get();
+    }
+
     return snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),

@@ -93,20 +93,61 @@ export class GetDashboardSummaryUseCase {
     return GetDashboardSummaryUseCase.summaryCache.getOrLoad(cacheKey, async () => {
       const orderFilter: any = isSeller ? { sellerId: actor.uid, limit: 150 } : { limit: 150 };
 
-      const [orders, allTrips, users] = isSeller
+      const [orders, allTrips, dashboardUsersData] = isSeller
         ? await Promise.all([
             this.orderRepo.getAll(orderFilter),
             this.tripRepo.getActiveTrips ? this.tripRepo.getActiveTrips() : this.tripRepo.getAll(),
             Promise.all([
-              this.userRepo.getAll({ userType: "client", sellerId: actor.uid }),
-              this.userRepo.getAll({ userType: "driver", status: "active" }),
-            ]).then(([sellerClients, drivers]) => [...sellerClients, ...drivers]),
+              this.userRepo.getAll({ userType: "client", sellerId: actor.uid, limit: 20 }),
+              this.userRepo.getAll({ userType: "driver", status: "active", limit: 50 }),
+              this.userRepo.count ? this.userRepo.count({ userType: "client", sellerId: actor.uid }) : Promise.resolve(0),
+            ]).then(([sellerClients, drivers, sellerClientsCount]) => ({
+              clients: sellerClients,
+              drivers,
+              sellers: [] as User[],
+              pendingUsers: [] as User[],
+              clientsCount: sellerClientsCount || sellerClients.length,
+              driversCount: drivers.length,
+              sellersCount: 0,
+              pendingUsersCount: 0,
+              aiRiskCount: 0,
+            })),
           ])
         : await Promise.all([
             this.orderRepo.getAll(orderFilter),
             this.tripRepo.getActiveTrips ? this.tripRepo.getActiveTrips() : this.tripRepo.getAll(),
-            this.userRepo.getAll(),
+            Promise.all([
+              this.userRepo.getAll({ userType: "client", limit: 20 }),
+              this.userRepo.getAll({ userType: "driver", status: "active", limit: 50 }),
+              this.userRepo.getAll({ userType: "seller", limit: 30 }),
+              this.userRepo.getAll({ status: "pending", limit: 10 }),
+              this.userRepo.count ? this.userRepo.count({ userType: "client" }) : Promise.resolve(0),
+              this.userRepo.count ? this.userRepo.count({ aiRiskFlag: true }) : Promise.resolve(0),
+              this.userRepo.count ? this.userRepo.count({ status: "pending" }) : Promise.resolve(0),
+            ]).then(([recentClients, activeDrivers, sellers, pendingUsers, totalClients, totalAiRisk, totalPending]) => ({
+              clients: recentClients,
+              drivers: activeDrivers,
+              sellers,
+              pendingUsers,
+              clientsCount: totalClients || recentClients.length,
+              driversCount: activeDrivers.length,
+              sellersCount: sellers.length,
+              pendingUsersCount: totalPending || pendingUsers.length,
+              aiRiskCount: totalAiRisk,
+            })),
           ]);
+
+      const {
+        clients,
+        drivers,
+        sellers,
+        pendingUsers,
+        clientsCount,
+        driversCount,
+        sellersCount,
+        pendingUsersCount,
+        aiRiskCount,
+      } = dashboardUsersData;
 
       const sortedOrders = [...orders].sort(
         (a, b) => toTimestamp(b.createdAt) - toTimestamp(a.createdAt)
@@ -131,7 +172,7 @@ export class GetDashboardSummaryUseCase {
         : allTrips;
 
       const userById = new Map<string, User>();
-      users.forEach((u) => userById.set(u.uid, u));
+      [...clients, ...drivers, ...sellers].forEach((u) => userById.set(u.uid, u));
 
       const validOrders = scopedOrders.filter(
         (o: any) => o.status !== "cancelled" && o.status !== "rejected"
@@ -143,11 +184,6 @@ export class GetDashboardSummaryUseCase {
       );
 
       const pendingOrders = scopedOrders.filter((o) => o.status === "pending");
-      const clients = users.filter((u) => u.userType === "client");
-      const drivers = users.filter((u) => u.userType === "driver" && u.status === "active");
-      const sellers = users.filter((u) => u.userType === "seller");
-      const pendingUsers = users.filter((u) => u.status === "pending");
-      const aiRiskUsers = users.filter((u) => (u as any).aiRiskFlag === true);
 
       const activeStatuses = isSeller
         ? ["started", "accepted", "in_progress"]
@@ -272,11 +308,11 @@ export class GetDashboardSummaryUseCase {
           pendingOrdersCount: pendingOrders.length,
           activeTripsCount: activeTrips.length,
           activeDeliveriesCount: activeTrips.length,
-          clientsCount: clients.length,
-          driversCount: drivers.length,
-          sellersCount: sellers.length,
-          pendingUsersCount: pendingUsers.length,
-          aiRiskCount: aiRiskUsers.length,
+          clientsCount,
+          driversCount,
+          sellersCount,
+          pendingUsersCount,
+          aiRiskCount,
         },
         activeTrips,
         completedTrips,

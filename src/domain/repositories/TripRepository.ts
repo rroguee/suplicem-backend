@@ -1,5 +1,12 @@
 import { Trip } from "../entities/Trip";
 
+export interface TripFilters {
+  status?: string;
+  assignedDriverId?: string;
+  driverId?: string;
+  limit?: number;
+}
+
 export interface TripRepository {
   create(trip: Trip): Promise<string>;
   createTripAtomic(trip: Trip, orderIds: string[]): Promise<string>;
@@ -10,7 +17,7 @@ export interface TripRepository {
   ): Promise<string[]>;
   getAvailable(driverId?: string): Promise<Trip[]>;
   getById(tripId: string): Promise<Trip | null>;
-  getAll(): Promise<Trip[]>;
+  getAll(filters?: TripFilters | string): Promise<Trip[]>;
   getActiveTrips?(): Promise<Trip[]>;
   getDriverTripHistory(userId: string): Promise<Trip[]>;
   getDriverActualTrips(userId: string): Promise<Trip[]>;

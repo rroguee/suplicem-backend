@@ -106,6 +106,10 @@ export class UserFirestoreRepository implements UserRepository {
         query = query.where("aiRiskFlag", "==", filters.aiRiskFlag);
       }
 
+      if (filters?.limit) {
+        query = query.limit(Math.min(filters.limit, 300));
+      }
+
       const snapshot = await query.get();
       return snapshot.docs.map((doc) => {
         const data = doc.data() as User;
@@ -122,6 +126,31 @@ export class UserFirestoreRepository implements UserRepository {
     } catch (error: any) {
       console.warn("Advertencia al obtener usuarios en Firestore:", error?.message || error);
       return [];
+    }
+  }
+
+  async count(filters?: UserFilters): Promise<number> {
+    try {
+      let query: FirebaseFirestore.Query = firestore.collection("users");
+
+      if (filters?.status) {
+        query = query.where("status", "==", filters.status);
+      }
+      if (filters?.userType) {
+        query = query.where("userType", "==", filters.userType);
+      }
+      if (filters?.sellerId) {
+        query = query.where("sellerId", "==", filters.sellerId);
+      }
+      if (filters?.aiRiskFlag !== undefined) {
+        query = query.where("aiRiskFlag", "==", filters.aiRiskFlag);
+      }
+
+      const countSnap = await query.count().get();
+      return countSnap.data().count;
+    } catch (error: any) {
+      console.warn("Advertencia al contar usuarios en Firestore:", error?.message || error);
+      return 0;
     }
   }
 }

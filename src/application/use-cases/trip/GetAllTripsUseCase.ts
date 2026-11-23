@@ -1,5 +1,5 @@
 import { Trip } from "../../../domain/entities/Trip";
-import { TripRepository } from "../../../domain/repositories/TripRepository";
+import { TripRepository, TripFilters } from "../../../domain/repositories/TripRepository";
 import { OrderRepository } from "../../../domain/repositories/OrderRepository";
 
 export interface TripsQueryParams {
@@ -41,13 +41,16 @@ export class GetAllTripsUseCase {
     private orderRepo?: OrderRepository
   ) {}
 
-  async execute(actor?: { uid: string; userType: string }): Promise<Trip[]> {
-    const trips = await this.tripRepo.getAll();
+  async execute(
+    actor?: { uid: string; userType: string },
+    filters?: TripFilters
+  ): Promise<Trip[]> {
+    const trips = await this.tripRepo.getAll(filters);
     if (actor?.userType !== "seller" || !this.orderRepo) {
       return trips;
     }
 
-    const sellerOrders = await this.orderRepo.getAll({ sellerId: actor.uid });
+    const sellerOrders = await this.orderRepo.getAll({ sellerId: actor.uid, limit: 150 });
     const sellerOrderIds = new Set<string>();
     sellerOrders.forEach((o) => {
       if (o.id) sellerOrderIds.add(o.id);
@@ -60,10 +63,19 @@ export class GetAllTripsUseCase {
   }
 
   async executePaginated(params: TripsQueryParams): Promise<PaginatedTripsResult> {
+    const statusForRepo =
+      params.status && params.status !== "Todos" && params.status !== "fractional"
+        ? params.status
+        : undefined;
+
     const scopedTrips = await this.execute(
       params.actorUid && params.actorUserType
         ? { uid: params.actorUid, userType: params.actorUserType }
-        : undefined
+        : undefined,
+      {
+        status: statusForRepo,
+        limit: params.limit ? Math.min(params.limit * 5, 200) : 100,
+      }
     );
 
     const priority: Record<string, number> = {
