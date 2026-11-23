@@ -186,7 +186,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       notifications.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "active" });
+    await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
 
     assert.strictEqual(notifications.calls.length, 1);
     assert.strictEqual(notifications.calls[0].userId, user.uid);
@@ -207,7 +207,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       notifications.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "active" });
+    await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 0);
     assert.strictEqual(notifications.calls.length, 1);
@@ -226,7 +226,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       notifications.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "active" });
+    await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
 
     assert.strictEqual(sms.calls.length, 1);
     assert.strictEqual(notifications.calls.length, 0);
@@ -243,7 +243,7 @@ describe("UpdateUserStatusUseCase - Notificaciones de estado", () => {
       bot.service
     );
 
-    await useCase.execute({ uid: user.uid, status: "active" });
+    await useCase.execute({ uid: user.uid, status: "active" }, "admin-1");
 
     assert.strictEqual(bot.calls.length, 0);
     assert.strictEqual(sms.calls.length, 1);
