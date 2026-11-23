@@ -1,8 +1,8 @@
 import "express";
-import admin from "firebase-admin";
+import type { DecodedIdToken } from "firebase-admin/auth";
 
 declare module "express" {
   interface Request {
-    user?: admin.auth.DecodedIdToken;
+    user?: DecodedIdToken;
   }
 }

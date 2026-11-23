@@ -1,5 +1,5 @@
 import { firestore } from "../../config/firebase";
-import { FieldPath } from "firebase-admin/firestore";
+import { FieldPath, type QueryDocumentSnapshot, type QuerySnapshot } from "firebase-admin/firestore";
 import { Trip } from "../../domain/entities/Trip";
 
 export class TripQueryService {
@@ -55,8 +55,8 @@ export class TripQueryService {
             .get()
         )
       );
-      userSnapshots.forEach((userSnap) => {
-        userSnap.docs.forEach((d) => userMap.set(d.id, d.data()));
+      userSnapshots.forEach((userSnap: QuerySnapshot) => {
+        userSnap.docs.forEach((d: QueryDocumentSnapshot) => userMap.set(d.id, d.data()));
       });
 
       orders = orders.map((order) => {
@@ -143,10 +143,10 @@ export class TripQueryService {
 
     // Priorizar viaje activo (en curso o disponible)
     const activeDoc =
-      tripSnap.docs.find((d) =>
+      tripSnap.docs.find((d: QueryDocumentSnapshot) =>
         ["available", "accepted", "started", "in_progress"].includes(d.data().status)
       ) ||
-      tripSnap.docs.find((d) => d.data().status !== "canceled");
+      tripSnap.docs.find((d: QueryDocumentSnapshot) => d.data().status !== "canceled");
 
     if (!activeDoc) return null;
 
