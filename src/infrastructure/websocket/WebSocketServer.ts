@@ -57,10 +57,15 @@ export class WebSocketServer {
         const decoded = await auth.verifyIdToken(token);
         const userData = await this.userRepo.getByIdStrict(decoded.uid);
 
+        if (!userData || userData.status !== "active") {
+          return next(new Error("Acceso denegado: su cuenta debe estar activa y aprobada para conectar al canal en vivo"));
+        }
+
         socket.data.user = {
           uid: decoded.uid,
           userType: userData?.userType || "client",
           names: userData?.names || "",
+          status: userData.status,
         };
 
         next();
@@ -73,10 +78,18 @@ export class WebSocketServer {
     // 2. Manejador de eventos y salas
     this.io.on("connection", (socket: Socket) => {
       const user = socket.data.user;
+      let lastWatchRequestTime = 0;
 
-      // A. Cliente, Vendedor o Admin se une a la sala validando autorización BOLA
+      // A. Cliente, Vendedor o Admin se une a la sala validando autorización BOLA con throttling anti-DoS
       socket.on("client:watch_trip", async (tripId: string) => {
         if (!tripId || typeof tripId !== "string") return;
+
+        // Throttling: descarta emisiones con intervalo menor a 500ms por socket para proteger cuotas de Firestore
+        const now = Date.now();
+        if (now - lastWatchRequestTime < 500) {
+          return;
+        }
+        lastWatchRequestTime = now;
 
         try {
           const isAllowed = await this.tripAuthService.canUserWatchTrip(user, tripId);
@@ -97,11 +110,35 @@ export class WebSocketServer {
         socket.leave(`trip:${tripId}`);
       });
 
+      let lastLocationEmissionTime = 0;
+
       // C. Chofer transmite posición en vivo validando que sea el chofer asignado
       socket.on("driver:location", async (payload: DriverLocationPayload) => {
         if (!user || user.userType !== "driver") return;
         if (!payload || !payload.tripId) return;
-        if (typeof payload.lat !== "number" || typeof payload.lng !== "number") return;
+
+        // Throttling: descarta emisiones con intervalo menor a 1 segundo por socket
+        const now = Date.now();
+        if (now - lastLocationEmissionTime < 1000) {
+          return;
+        }
+        lastLocationEmissionTime = now;
+
+        // Validación estricta de coordenadas geográficas válidas (evita NaN, Infinity y valores fuera de rango)
+        const lat = Number(payload.lat);
+        const lng = Number(payload.lng);
+        if (
+          isNaN(lat) ||
+          isNaN(lng) ||
+          !isFinite(lat) ||
+          !isFinite(lng) ||
+          lat < -90 ||
+          lat > 90 ||
+          lng < -180 ||
+          lng > 180
+        ) {
+          return;
+        }
 
         try {
           const canEmit = await this.tripAuthService.canDriverEmitLocation(user.uid, payload.tripId);
@@ -141,5 +178,15 @@ export class WebSocketServer {
 
   public static getIO(): Server | null {
     return this.io;
+  }
+
+  public static notifyTripCompleted(tripId: string): void {
+    if (!this.io || !tripId) return;
+    this.io.to(`trip:${tripId}`).emit("trip:completed", {
+      tripId,
+      message: "Viaje completado exitosamente",
+      completedAt: new Date().toISOString(),
+    });
+    this.io.in(`trip:${tripId}`).socketsLeave(`trip:${tripId}`);
   }
 }

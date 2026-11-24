@@ -23,7 +23,7 @@ export class UpdateUserUseCase {
     }
 
     const isAuthorizedAdmin = requester.userType === "admin" && requester.status === "active";
-    const isOwner = requester.uid === userToUpdate.uid;
+    const isOwner = requester.uid === userToUpdate.uid && requester.status === "active";
 
     if (!isAuthorizedAdmin && !isOwner) {
       throw new Error("No tienes permiso para actualizar este usuario");

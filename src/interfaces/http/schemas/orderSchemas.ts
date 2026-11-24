@@ -208,3 +208,7 @@ export const GetOrdersQuerySchema = z
   })
   .optional()
   .default({});
+
+export const OrderIdParamSchema = z.object({
+  id: z.string().trim().min(3, "ID de orden inválido"),
+});

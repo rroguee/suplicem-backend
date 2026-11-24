@@ -444,11 +444,21 @@ export class OrderFirestoreRepository implements OrderRepository {
     });
   }
 
-  async updateReceiptImage(orderId: string, receiptImage: string): Promise<void> {
-    await firestore.collection("orders").doc(orderId).update({
+  async updateReceiptImage(
+    orderId: string,
+    receiptImage: string,
+    aiRiskData?: { aiRiskFlag?: boolean; aiRiskScore?: number; aiRiskReason?: string }
+  ): Promise<void> {
+    const payload: any = {
       receiptImage,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    if (aiRiskData) {
+      if (aiRiskData.aiRiskFlag !== undefined) payload.aiRiskFlag = aiRiskData.aiRiskFlag;
+      if (aiRiskData.aiRiskScore !== undefined) payload.aiRiskScore = aiRiskData.aiRiskScore;
+      if (aiRiskData.aiRiskReason !== undefined) payload.aiRiskReason = aiRiskData.aiRiskReason;
+    }
+    await firestore.collection("orders").doc(orderId).update(payload);
     OrderFirestoreRepository.orderByIdCache.invalidate(orderId);
   }
 }

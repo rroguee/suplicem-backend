@@ -4,12 +4,10 @@ import { CreateOrderUseCase } from "../../../application/use-cases/order/CreateO
 import { GetMyOrdersUseCase } from "../../../application/use-cases/order/GetMyOrdersUseCase";
 import { GetAllOrdersUseCase } from "../../../application/use-cases/order/GetAllOrdersUseCase";
 import { UpdateOrderStatusUseCase } from "../../../application/use-cases/order/UpdateOrderStatusUseCase";
-import { MarkDeliveryCompletedUseCase } from "../../../application/use-cases/order/MarkDeliveryCompletedUseCase";
 import { UpdateOrderDeliveriesUseCase } from "../../../application/use-cases/order/UpdateOrderDeliveriesUseCase";
-import { AttachDeliveryProofUseCase } from "../../../application/use-cases/order/AttachDeliveryProofUseCase";
 import { UpdateOrderReceiptUseCase } from "../../../application/use-cases/order/UpdateOrderReceiptUseCase";
 import { GetOrderDispatchPlanUseCase } from "../../../application/use-cases/order/GetOrderDispatchPlanUseCase";
-import { uploadDeliveryImage, uploadReceiptImage } from "../../../infrastructure/services/ImageStorageService";
+import { uploadReceiptImage } from "../../../infrastructure/services/ImageStorageService";
 import { GetOrderByIdUseCase } from "../../../application/use-cases/order/GetOrderByIdUseCase";
 import { UserFirestoreRepository } from "../../../infrastructure/firestore/UserFirestoreRepository";
 import { GetOrderTrackingUseCase } from "../../../application/use-cases/order/GetOrderTrackingUseCase";
@@ -44,11 +42,9 @@ export class OrderController {
     ),
     private getMyOrdersUseCase = new GetMyOrdersUseCase(orderRepo, userRepo),
     private getOrderTrackingUseCase = new GetOrderTrackingUseCase(orderRepo, tripRepo, locationRepo, userRepo),
-    private getOrderByIdUseCase = new GetOrderByIdUseCase(orderRepo),
+    private getOrderByIdUseCase = new GetOrderByIdUseCase(orderRepo, tripRepo),
     private getAllOrdersUseCase = new GetAllOrdersUseCase(orderRepo, userRepo),
     private updateOrderStatusUseCase = new UpdateOrderStatusUseCase(orderRepo, tripRepo, userRepo, notificationDispatcher),
-    private markDeliveryCompletedUseCase = new MarkDeliveryCompletedUseCase(orderRepo, tripRepo, userRepo, notificationDispatcher),
-    private attachDeliveryProofUseCase = new AttachDeliveryProofUseCase(orderRepo, tripRepo),
     private updateOrderDeliveriesUseCase = new UpdateOrderDeliveriesUseCase(orderRepo),
     private updateOrderReceiptUseCase = new UpdateOrderReceiptUseCase(orderRepo),
     private getOrderDispatchPlanUseCase = new GetOrderDispatchPlanUseCase(orderRepo)
@@ -141,23 +137,27 @@ export class OrderController {
   async getById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const order = await this.getOrderByIdUseCase.execute(id);
+      const authUser = (req as any).user;
+      if (!authUser) {
+        return res.status(401).json({ success: false, message: "Usuario no autenticado" });
+      }
+
+      const order = await this.getOrderByIdUseCase.execute(id, authUser);
       if (!order) {
         return res.status(404).json({ success: false, message: "Orden no encontrada" });
       }
 
-      const authUser = (req as any).user;
-      if (authUser?.userType === "client" && order.userId !== authUser.uid) {
-        return res.status(403).json({ success: false, message: "No tienes permiso para ver esta orden" });
-      }
-
-      if (authUser?.userType === "seller" && order.sellerId && order.sellerId !== authUser.uid) {
-        return res.status(403).json({ success: false, message: "No tienes permiso para ver esta orden" });
-      }
-
       res.status(200).json({ success: true, order });
     } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message || "Error al obtener la orden" });
+      const isForbidden =
+        error.statusCode === 403 ||
+        error.message?.includes("permiso") ||
+        error.message?.includes("Acceso denegado");
+      const status = isForbidden ? 403 : 500;
+      res.status(status).json({
+        success: false,
+        message: isForbidden ? "No tienes permiso para consultar esta orden" : (error.message || "Error al obtener la orden"),
+      });
     }
   }
 
@@ -227,79 +227,6 @@ export class OrderController {
     }
   }
 
-
-  async completeDelivery(req: Request, res: Response) {
-    try {
-      const { id, index } = req.params;
-      const parsedIndex = parseInt(index, 10);
-      if (isNaN(parsedIndex)) return res.status(400).json({ success: false, message: "Índice inválido" });
-      const authUser = (req as any).user;
-
-      await this.markDeliveryCompletedUseCase.execute({
-        orderId: id,
-        index: parsedIndex,
-        comment: req.body?.comment,
-        userId: authUser?.uid,
-        userRole: authUser?.userType,
-      });
-      res.status(200).json({ success: true, message: "Entrega marcada como completada" });
-    } catch (error: any) {
-      const status = error.message?.includes("permiso") ? 403 : 400;
-      res.status(status).json({ success: false, message: error.message || "Error al actualizar la entrega" });
-    }
-  }
-
-  async completeDeliveryWithProof(req: Request, res: Response) {
-    try {
-      const { id, index } = req.params;
-      const parsedIndex = parseInt(index, 10);
-      if (isNaN(parsedIndex)) return res.status(400).json({ success: false, message: "Índice de entrega inválido" });
-      const authUser = (req as any).user;
-
-      const imageUrl = req.file ? await uploadDeliveryImage(req.file, id, parsedIndex) : undefined;
-      await this.markDeliveryCompletedUseCase.execute({
-        orderId: id,
-        index: parsedIndex,
-        comment: req.body?.comment,
-        imageUrl,
-        userId: authUser?.uid,
-        userRole: authUser?.userType,
-      });
-
-      res.status(200).json({
-        success: true,
-        message: "Entrega completada y comprobante guardado exitosamente",
-        imageUrl,
-      });
-    } catch (error: any) {
-      const status = error.message?.includes("permiso") ? 403 : 500;
-      res.status(status).json({ success: false, message: error.message || "Error al completar la entrega" });
-    }
-  }
-
-  async attachToDelivery(req: Request, res: Response) {
-    try {
-      const { id, index } = req.params;
-      const parsedIndex = parseInt(index, 10);
-      if (isNaN(parsedIndex)) return res.status(400).json({ success: false, message: "Índice de entrega inválido" });
-      const authUser = (req as any).user;
-
-      const imageUrl = req.file ? await uploadDeliveryImage(req.file, id, parsedIndex) : undefined;
-      await this.attachDeliveryProofUseCase.execute({
-        orderId: id,
-        index: parsedIndex,
-        comment: req.body?.comment,
-        imageUrl,
-        userId: authUser?.uid,
-        userRole: authUser?.userType,
-      });
-
-      res.status(200).json({ success: true, message: "Entrega actualizada correctamente", url: imageUrl });
-    } catch (error: any) {
-      const status = error.message?.includes("permiso") ? 403 : 500;
-      res.status(status).json({ success: false, message: error.message || "Error al actualizar la entrega" });
-    }
-  }
 
   async updateDeliveries(req: Request, res: Response) {
     try {

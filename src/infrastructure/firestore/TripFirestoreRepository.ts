@@ -266,26 +266,24 @@ export class TripFirestoreRepository implements TripRepository {
   }
 
   async getDriverActualTrips(userId: string): Promise<Trip[]> {
-    const snapshot = await firestore
-      .collection("trips")
-      .where("assignedDriverId", "==", userId)
-      .get();
+    if (!userId || typeof userId !== "string") return [];
 
-    let trips = snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((trip: any) => ["accepted", "started", "in_progress"].includes(trip.status)) as Trip[];
+    // Consultar en paralelo tanto assignedDriverId como driverId para no omitir ningún registro
+    const [assignedSnap, driverSnap] = await Promise.all([
+      firestore.collection("trips").where("assignedDriverId", "==", userId).get(),
+      firestore.collection("trips").where("driverId", "==", userId).get(),
+    ]);
 
-    if (trips.length === 0) {
-      const driverSnapshot = await firestore
-        .collection("trips")
-        .where("driverId", "==", userId)
-        .get();
-      trips = driverSnapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((trip: any) => ["accepted", "started", "in_progress"].includes(trip.status)) as Trip[];
-    }
+    const tripsMap = new Map<string, Trip>();
 
-    return trips;
+    [...assignedSnap.docs, ...driverSnap.docs].forEach((doc) => {
+      const data = { id: doc.id, ...doc.data() } as Trip;
+      if (["accepted", "started", "in_progress"].includes(data.status)) {
+        tripsMap.set(doc.id, data);
+      }
+    });
+
+    return Array.from(tripsMap.values());
   }
 
   async assignDriver(tripId: string, driverId: string): Promise<void> {

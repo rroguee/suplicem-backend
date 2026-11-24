@@ -36,5 +36,9 @@ export interface OrderRepository {
     deliveryType: string,
     deliveries: any[]
   ): Promise<any>;
-  updateReceiptImage(orderId: string, receiptImage: string): Promise<void>;
+  updateReceiptImage(
+    orderId: string,
+    receiptImage: string,
+    aiRiskData?: { aiRiskFlag?: boolean; aiRiskScore?: number; aiRiskReason?: string }
+  ): Promise<void>;
 }

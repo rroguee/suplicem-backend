@@ -39,8 +39,9 @@ export class AttachDeliveryProofUseCase {
         const trip = await this.tripRepo.getTripByOrderId(dto.orderId);
         const assignedDriver =
           trip?.assignedDriverId || (trip as any)?.driverId || trip?.driver?.id || trip?.driver?.uid;
-        if (!trip || assignedDriver !== dto.userId) {
-          throw new Error("No tienes permiso para adjuntar comprobantes en esta orden porque no eres el conductor asignado.");
+        const isTripActive = trip && ["accepted", "started", "in_progress"].includes(trip.status);
+        if (!trip || assignedDriver !== dto.userId || !isTripActive) {
+          throw new Error("No tienes permiso para adjuntar comprobantes en esta orden porque no cuentas con un viaje activo asignado.");
         }
       }
     }

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { TripController } from "../controllers/TripController";
 import { authenticate } from "../middlewares/authenticate";
 import { requireRole } from "../middlewares/authorize";
-import { validate, validateQuery } from "../middlewares/validate";
+import { validate, validateParams, validateQuery } from "../middlewares/validate";
 import {
   CreateTripSchema,
   UpdateTripStatusSchema,
@@ -11,7 +11,9 @@ import {
   SplitOrderTripsSchema,
   GetTripsQuerySchema,
   GetTripDirectionsQuerySchema,
+  TripIdParamSchema,
 } from "../schemas/tripSchemas";
+import { OrderIdParamSchema } from "../schemas/orderSchemas";
 
 
 export const tripRoutes = (router: Router) => {
@@ -62,7 +64,7 @@ export const tripRoutes = (router: Router) => {
   router.patch(
     "/trips/:id/assign",
     authenticate,
-    requireRole(["admin", "seller"]),
+    requireRole(["admin"]),
     validate(AssignTripDriverSchema),
     async (req, res) => {
       await tripController.assignDriver(req, res);
@@ -73,7 +75,7 @@ export const tripRoutes = (router: Router) => {
   router.post(
     "/trips/order/:orderId/split-plan",
     authenticate,
-    requireRole(["admin", "seller"]),
+    requireRole(["admin"]),
     validate(SplitOrderTripsSchema),
     async (req, res) => {
       await tripController.splitOrderTrips(req, res);
@@ -84,7 +86,7 @@ export const tripRoutes = (router: Router) => {
   router.post(
     "/trips/:id/split",
     authenticate,
-    requireRole(["admin", "seller"]),
+    requireRole(["admin"]),
     validate(SplitOrderTripsSchema),
     async (req, res) => {
       await tripController.splitSingleTrip(req, res);
@@ -155,12 +157,22 @@ export const tripRoutes = (router: Router) => {
   );
 
   // 8. Detalle por ID de viaje
-  router.get("/trips/:id", authenticate, async (req, res) => {
-    await tripController.getById(req, res);
-  });
+  router.get(
+    "/trips/:id",
+    authenticate,
+    validateParams(TripIdParamSchema),
+    async (req, res) => {
+      await tripController.getById(req, res);
+    }
+  );
 
   // 9. Detalle por ID de orden
-  router.get("/trips/order/:id", authenticate, async (req, res) => {
-    await tripController.getTripByOrderId(req, res);
-  });
+  router.get(
+    "/trips/order/:id",
+    authenticate,
+    validateParams(OrderIdParamSchema),
+    async (req, res) => {
+      await tripController.getTripByOrderId(req, res);
+    }
+  );
 };

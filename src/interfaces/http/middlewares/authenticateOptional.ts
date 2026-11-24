@@ -42,6 +42,17 @@ export const authenticateOptional = async (
 
   try {
     const userData = await userRepository.getByIdStrict(decodedToken.uid);
+    const userStatus = userData?.status || "pending";
+
+    if (userStatus === "inactive" || userStatus === "banned") {
+      res.status(403).json({
+        success: false,
+        code: "ACCOUNT_INACTIVE",
+        message: "Acceso denegado: su cuenta se encuentra inactiva o suspendida",
+      });
+      return;
+    }
+
     const rawUserType = userData?.userType || "client";
     const normalizedUserType = String(rawUserType).trim().toLowerCase() as any;
 
@@ -49,7 +60,7 @@ export const authenticateOptional = async (
       uid: decodedToken.uid,
       email: decodedToken.email,
       userType: normalizedUserType,
-      status: userData?.status || "pending",
+      status: userStatus,
     } as ApplicationActor;
 
     next();

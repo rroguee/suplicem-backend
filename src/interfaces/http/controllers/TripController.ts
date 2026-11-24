@@ -38,7 +38,7 @@ export class TripController {
     private getAllTripsUseCase = new GetAllTripsUseCase(tripRepo, orderRepo),
     private acceptTripUseCase = new AcceptTripUseCase(tripRepo, userRepo),
     private getTripDetailsUseCase = new GetTripDetailsUseCase(tripRepo),
-    private getTripByOrderIdUseCase = new GetTripByOrderIdUseCase(tripRepo),
+    private getTripByOrderIdUseCase = new GetTripByOrderIdUseCase(tripRepo, orderRepo),
     private updateTripStatusUseCase = new UpdateTripStatusUseCase(tripRepo),
     private completeTripUseCase = new CompleteTripUseCase(tripRepo, orderRepo, userRepo, notificationDispatcher),
     private getTripByIdUseCase = new GetTripByIdUseCase(tripRepo),
@@ -52,7 +52,8 @@ export class TripController {
 
   async create(req: Request, res: Response) {
     try {
-      const tripId = await this.createTripUseCase.execute(req.body);
+      const authUser = (req as any).user;
+      const tripId = await this.createTripUseCase.execute(req.body, authUser);
       res.status(201).json({ success: true, message: "Viaje creado correctamente", tripId });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message || "Error al crear el viaje" });
@@ -159,13 +160,10 @@ export class TripController {
     try {
       const authUser = (req as any).user;
       const orderId = req.params.id;
-      const result = await this.getTripByOrderIdUseCase.execute(orderId);
+      const result = await this.getTripByOrderIdUseCase.execute(orderId, authUser);
 
       if (!result.trip && result.trips.length === 0) {
         return res.status(404).json({ success: false, message: "Viajes no encontrados" });
-      }
-      if (authUser?.userType === "driver" && result.trip && result.trip.assignedDriverId !== authUser.uid) {
-        return res.status(403).json({ success: false, message: "No tienes permiso para ver este viaje" });
       }
 
       res.status(200).json({
@@ -174,7 +172,8 @@ export class TripController {
         trips: result.trips,
       });
     } catch (error: any) {
-      const status = error.message?.includes("permiso") ? 403 : 404;
+      const isForbidden = error.message?.includes("permiso");
+      const status = isForbidden ? 403 : 404;
       res.status(status).json({ success: false, message: error.message || "Error al obtener el viaje" });
     }
   }

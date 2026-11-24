@@ -88,6 +88,50 @@ export class CreateOrderUseCase {
     // 4. Cálculo de Toneladas delegado a TonnageCalculatorService
     const calculatedTotalTons = this.tonnageCalculator.calculateTotalTons(validatedItems);
 
+    // 4.1. Validación de Integridad de Entregas (deliveries vs items comprados)
+    if (data.deliveryType === "domicilio" && data.deliveries && data.deliveries.length > 0) {
+      const itemsMap = new Map<string, { name: string; quantity: number }>();
+      for (const item of validatedItems) {
+        itemsMap.set(item.productId, {
+          name: item.name || item.productId,
+          quantity: item.quantity,
+        });
+      }
+
+      const requestedDeliveriesMap = new Map<string, number>();
+      for (const del of data.deliveries) {
+        if (!itemsMap.has(del.productId)) {
+          throw new Error(
+            `El producto en entrega '${del.productId}' no coincide con los productos comprados en el pedido.`
+          );
+        }
+        const qty = Number(del.quantity) || 0;
+        if (qty <= 0) {
+          throw new Error(`La cantidad de entrega para el producto '${del.productId}' debe ser mayor a 0.`);
+        }
+        const itemInfo = itemsMap.get(del.productId)!;
+        const isCement = (itemInfo.name || "").toLowerCase().includes("cemento");
+        if (isCement && (qty < 50 || qty % 50 !== 0)) {
+          throw new Error(
+            `Cada entrega de ${itemInfo.name} debe ser a partir de 50 fundas (en múltiplos de 50).`
+          );
+        }
+        requestedDeliveriesMap.set(
+          del.productId,
+          (requestedDeliveriesMap.get(del.productId) || 0) + qty
+        );
+      }
+
+      for (const [productId, totalRequestedQty] of requestedDeliveriesMap.entries()) {
+        const itemInfo = itemsMap.get(productId)!;
+        if (totalRequestedQty > itemInfo.quantity) {
+          throw new Error(
+            `La cantidad total programada en entregas (${totalRequestedQty}) para '${itemInfo.name}' supera la cantidad comprada (${itemInfo.quantity}).`
+          );
+        }
+      }
+    }
+
     // 5. Enriquecimiento de Usuario y Vendedor
     let userPhone = "";
     let userNames = "";
@@ -115,10 +159,12 @@ export class CreateOrderUseCase {
 
     const orderNumber = await this.orderRepo.getNextOrderNumber();
     const resolvedDeliveryAddress =
-      data.deliveryAddress ||
-      (data.deliveries && data.deliveries.length > 0 && data.deliveries[0].address
-        ? data.deliveries[0].address
-        : undefined);
+      data.deliveryType === "almacen"
+        ? undefined
+        : data.deliveryAddress ||
+          (data.deliveries && data.deliveries.length > 0 && data.deliveries[0].address
+            ? data.deliveries[0].address
+            : undefined);
 
     // 6. Ensamblado de la Entidad Order
     const order: Order = {
@@ -136,12 +182,15 @@ export class CreateOrderUseCase {
       pendingBalance: calculatedTotalTons,
       deliveredTons: 0,
       deliveryAddress: resolvedDeliveryAddress,
-      deliveries: (data.deliveries ?? []).map((d) => ({
-        ...d,
-        address: d.address || resolvedDeliveryAddress,
-        status: "pending",
-        images: [],
-      })),
+      deliveries:
+        data.deliveryType === "almacen"
+          ? []
+          : (data.deliveries ?? []).map((d) => ({
+              ...d,
+              address: d.address || resolvedDeliveryAddress,
+              status: "pending",
+              images: [],
+            })),
       items: validatedItems,
       paymentMethod: data.paymentMethod,
       bankAccountId: data.bankAccountId,

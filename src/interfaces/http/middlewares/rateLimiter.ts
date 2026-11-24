@@ -73,6 +73,18 @@ export const ordersLimiter = rateLimit({
   },
 });
 
+export const locationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: {
+    success: false,
+    message: "Frecuencia de telemetría GPS excedida. Intente de nuevo en un momento.",
+  },
+});
+
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,

@@ -22,7 +22,10 @@ export class UpdateTripStatusUseCase {
       throw new Error("El viaje no fue encontrado.");
     }
     
-    if (userRole === "driver") {
+    if (userRole !== "admin") {
+      if (userRole !== "driver") {
+        throw new Error("Acceso denegado: no tienes permisos para actualizar el estado del viaje.");
+      }
       const assignedDriver =
         trip.assignedDriverId ||
         (trip as any).driverId ||
@@ -76,7 +79,7 @@ export class UpdateTripStatusUseCase {
         throw new Error("No se puede iniciar el viaje porque no tiene un conductor asignado.");
       }
 
-      // Regla de concurrencia: El conductor no puede tener más de un viaje en curso al mismo tiempo
+      // Regla estricta: Solo una ruta activa en tránsito a la vez por chofer
       const driverTrips = await this.tripRepo.getDriverActualTrips(assignedDriver);
       const activeRunningTrip = driverTrips.find(
         (t) =>

@@ -11,7 +11,11 @@ export class OrderPricingService {
       throw new Error(`La cantidad para el producto ${product.name} debe ser mayor a cero.`);
     }
 
-    const unitPrice = product.price;
+    const unitPrice = Number(product.price);
+    if (isNaN(unitPrice) || unitPrice <= 0) {
+      throw new Error(`El producto '${product.name}' no cuenta con un precio unitario válido configurado en el sistema.`);
+    }
+
     const name = product.name;
     const isCement = name.toLowerCase().includes("cemento") || product.unit === "fundas";
     const unit = isCement ? "fundas" : (product.unit || "fundas");

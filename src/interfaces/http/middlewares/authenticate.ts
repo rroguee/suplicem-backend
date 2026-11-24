@@ -45,11 +45,23 @@ export const authenticate = async (
   try {
     // 2. Obtener el rol y estado real del usuario desde caché/Firestore
     const userData = await userRepository.getByIdStrict(decodedToken.uid);
+    // Extraer la ruta estricta sin query parameters para evitar evasiones por parameter pollution
+    const cleanPath = req.baseUrl ? `${req.baseUrl}${req.path}` : req.path;
+    const isAuthMe = cleanPath === "/api/auth/me" || req.path === "/auth/me";
+
+    // Rechazar tokens válidos de Firebase cuyo usuario no exista en Firestore (cuenta huérfana o eliminada)
+    if (!userData && !isAuthMe) {
+      res.status(401).json({
+        success: false,
+        code: "USER_NOT_REGISTERED",
+        message: "Acceso denegado: la cuenta de usuario no está registrada en el sistema",
+      });
+      return;
+    }
+
     const rawUserType = userData?.userType || "client";
     const normalizedUserType = String(rawUserType).trim().toLowerCase();
-
     const userStatus = userData?.status || "pending";
-    const isAuthMe = req.path === "/auth/me" || (req.originalUrl && req.originalUrl.includes("/auth/me"));
 
     if (!isAuthMe && (userStatus === "inactive" || userStatus === "banned")) {
       res.status(403).json({

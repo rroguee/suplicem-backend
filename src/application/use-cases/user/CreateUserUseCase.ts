@@ -97,8 +97,10 @@ export class CreateUserUseCase {
         throw new Error("El nombre o razón social de la empresa es obligatorio al registrar con RNC.");
       }
     }
-    const status = isAuthorizedAdmin || isAuthorizedSeller
+    const status = isAuthorizedAdmin
       ? (parsedData.status || "active")
+      : isAuthorizedSeller
+      ? "active"
       : "pending";
     if (effectiveIdentificationType === "Cedula") {
       if (!isValidDominicanCedula(effectiveIdentification)) {

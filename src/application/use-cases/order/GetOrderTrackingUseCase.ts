@@ -66,8 +66,27 @@ export class GetOrderTrackingUseCase {
       return null;
     }
 
-    if (userRole === "client" && order.userId !== userId) {
-      throw new Error("No tienes permiso para ver el tracking de esta orden.");
+    if (!userId || !userRole) {
+      throw new Error("Acceso denegado: usuario no autenticado.");
+    }
+
+    // Validación estricta RBAC / BOLA con política Default-Deny
+    if (userRole === "client") {
+      if (order.userId !== userId && (order as any).userUid !== userId) {
+        throw new Error("No tienes permiso para ver el tracking de esta orden.");
+      }
+    } else if (userRole === "seller") {
+      const isAssignedSeller =
+        order.sellerId === userId || order.createdBySellerId === userId;
+      if (!isAssignedSeller) {
+        throw new Error("No tienes permiso para ver el tracking de esta orden.");
+      }
+    } else if (userRole === "driver") {
+      // Verificación de asignación del chofer tras cargar los viajes
+    } else if (userRole === "admin") {
+      // Acceso global para administradores
+    } else {
+      throw new Error("Acceso denegado: rol no autorizado para consultar tracking.");
     }
 
     // 1. Obtener todos los viajes asociados a la orden
@@ -103,7 +122,8 @@ export class GetOrderTrackingUseCase {
       if (!t.driver && this.userRepo) {
         missingDriverIds.add(driverId);
       }
-      if (t.status === "accepted" || t.status === "started" || t.status === "in_progress") {
+      // Privacidad del Conductor: solo consultar ubicación si el viaje está efectivamente en ruta
+      if (t.status === "started" || t.status === "in_progress") {
         activeLocationDriverIds.add(driverId);
       }
     }
@@ -147,8 +167,7 @@ export class GetOrderTrackingUseCase {
     const mappedTrips: TripTrackingItemDto[] = rawTrips.map((t) => {
       const driverId = t.assignedDriverId || t.driverId || t.driver?.id || t.driver?.uid;
       const driverData = t.driver || (driverId ? driverMap.get(driverId) || null : null);
-      const isActiveTrip =
-        t.status === "accepted" || t.status === "started" || t.status === "in_progress";
+      const isActiveTrip = t.status === "started" || t.status === "in_progress";
       const locationData =
         driverId && isActiveTrip ? locationMap.get(driverId) || null : null;
 

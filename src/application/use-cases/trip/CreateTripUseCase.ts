@@ -12,18 +12,24 @@ export class CreateTripUseCase {
     private userRepo?: UserRepository
   ) {}
 
-  async execute(data: {
-    tripNumber: string;
-    orderIds: string[];
-    driverId?: string;
-    comments?: string;
-    totalTons?: number;
-  }): Promise<string> {
+  async execute(
+    data: {
+      tripNumber: string;
+      orderIds: string[];
+      driverId?: string;
+      comments?: string;
+      totalTons?: number;
+    },
+    authUser?: { uid: string; userType: string }
+  ): Promise<string> {
     if (!data.tripNumber || !data.orderIds?.length) {
-      throw new Error("El número de viaje y al menos una orden son requeridos.");
+      throw new Error("El número de viaje y la orden son requeridos.");
     }
 
     const uniqueOrderIds = [...new Set(data.orderIds)];
+    if (uniqueOrderIds.length !== 1) {
+      throw new Error("Regla de despacho violada: un viaje solo puede vincularse a una única orden de cliente.");
+    }
     let calculatedTotalTons = 0;
     let existingTripsCount = 0;
 
@@ -31,6 +37,17 @@ export class CreateTripUseCase {
       const order = await this.orderRepo.getById(orderId);
       if (!order) {
         throw new Error(`La orden con ID ${orderId} no fue encontrada.`);
+      }
+
+      // Validación RBAC de cartera para vendedores
+      if (authUser?.userType === "seller") {
+        const isMyPortfolio =
+          order.sellerId === authUser.uid || order.createdBySellerId === authUser.uid;
+        if (!isMyPortfolio) {
+          throw new Error(
+            `Acceso denegado: la orden #${order.orderNumber || orderId} no pertenece a su cartera.`
+          );
+        }
       }
 
       if (order.status !== "approved") {

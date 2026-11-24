@@ -10,3 +10,7 @@ export const UpdateLocationSchema = z.object({
     .min(-180, "longitud mínima es -180")
     .max(180, "longitud máxima es 180"),
 });
+
+export const DriverLocationParamSchema = z.object({
+  driverId: z.string().trim().min(3, "ID de conductor inválido"),
+});

@@ -36,6 +36,22 @@ export const normalizeOrderData = (req: Request, _res: Response, next: NextFunct
     body.idempotencyKey = headerKey;
   }
 
+  // 🔒 Prevención de escalada RBAC / Parameter Pollution:
+  // Sanitización estricta: Eliminar campos privilegiados del payload de entrada
+  const authUser = (req as any).user;
+  delete body.createdBySellerId;
+  delete body.createdByAdminId;
+
+  if (authUser?.userType === "seller") {
+    body.createdBySellerId = authUser.uid;
+  } else if (authUser?.userType === "admin") {
+    body.createdByAdminId = authUser.uid;
+  } else {
+    if (authUser?.userType === "client") {
+      body.userId = authUser.uid;
+    }
+  }
+
   req.body = body;
   next();
 };

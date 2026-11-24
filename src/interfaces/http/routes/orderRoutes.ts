@@ -4,16 +4,14 @@ import { OrderController } from "../controllers/OrderController";
 import { authenticate } from "../middlewares/authenticate";
 import { requireRole } from "../middlewares/authorize";
 import { ordersLimiter } from "../middlewares/rateLimiter";
-import { validate, validateQuery } from "../middlewares/validate";
+import { validate, validateParams, validateQuery } from "../middlewares/validate";
 import {
   CreateOrderSchema,
   UpdateOrderStatusSchema,
   UpdateOrderDeliveriesSchema,
-  CompleteDeliverySchema,
-  AttachDeliveryProofSchema,
+  OrderIdParamSchema,
   GetOrdersQuerySchema,
 } from "../schemas/orderSchemas";
-import { validateImageFile } from "../middlewares/validateImageFile";
 import { validateReceiptUpload } from "../middlewares/validateReceiptUpload";
 import multer from "multer";
 
@@ -24,9 +22,14 @@ const upload = multer({
 
 export const orderRoutes = (router: Router) => {
   const orderController = new OrderController();
-  router.get("/orders/:id/tracking", authenticate, async (req, res) => {
-    await orderController.getTracking(req, res);
-  });
+  router.get(
+    "/orders/:id/tracking",
+    authenticate,
+    validateParams(OrderIdParamSchema),
+    async (req, res) => {
+      await orderController.getTracking(req, res);
+    }
+  );
 
   router.post(
     "/orders",
@@ -62,21 +65,28 @@ export const orderRoutes = (router: Router) => {
     "/orders/:id/dispatch-plan",
     authenticate,
     requireRole(["admin"]),
+    validateParams(OrderIdParamSchema),
     async (req, res) => {
       await orderController.getDispatchPlan(req, res);
     }
   );
 
   // 4. Ver orden por ID (Cualquier usuario autenticado involucrado)
-  router.get("/orders/:id", authenticate, async (req, res) => {
-    await orderController.getById(req, res);
-  });
+  router.get(
+    "/orders/:id",
+    authenticate,
+    validateParams(OrderIdParamSchema),
+    async (req, res) => {
+      await orderController.getById(req, res);
+    }
+  );
 
   // 5. Aprobar o rechazar orden (Solo Administradores)
   router.patch(
     "/orders/:id/status",
     authenticate,
     requireRole(["admin"]),
+    validateParams(OrderIdParamSchema),
     validate(UpdateOrderStatusSchema),
     async (req, res) => {
       await orderController.updateStatus(req, res);
@@ -88,6 +98,7 @@ export const orderRoutes = (router: Router) => {
     "/orders/:id/deliveries",
     authenticate,
     requireRole(["admin"]),
+    validateParams(OrderIdParamSchema),
     validate(UpdateOrderDeliveriesSchema),
     async (req, res) => {
       await orderController.updateDeliveries(req, res);
@@ -98,54 +109,19 @@ export const orderRoutes = (router: Router) => {
     "/orders/:id/deliveries",
     authenticate,
     requireRole(["admin"]),
+    validateParams(OrderIdParamSchema),
     validate(UpdateOrderDeliveriesSchema),
     async (req, res) => {
       await orderController.updateDeliveries(req, res);
     }
   );
 
-  // 7. Marcar entrega completada (Conductores y Administradores)
-  router.patch(
-    "/orders/:id/deliveries/:index",
-    authenticate,
-    requireRole(["driver", "admin"]),
-    validate(CompleteDeliverySchema),
-    async (req, res) => {
-      await orderController.completeDelivery(req, res);
-    }
-  );
-
-  // 8. Adjuntar comprobante fotográfico a entrega (Conductores y Administradores)
-  router.patch(
-    "/orders/:id/deliveries/:index/attachment",
-    authenticate,
-    requireRole(["driver", "admin"]),
-    upload.single("image"),
-    validateImageFile,
-    validate(AttachDeliveryProofSchema),
-    async (req, res) => {
-      await orderController.attachToDelivery(req, res);
-    }
-  );
-
-  // 9. Completar entrega con comprobante en una sola operación atómica (Conductores y Administradores)
-  router.post(
-    "/orders/:id/deliveries/:index/complete",
-    authenticate,
-    requireRole(["driver", "admin"]),
-    upload.single("image"),
-    validateImageFile,
-    validate(CompleteDeliverySchema),
-    async (req, res) => {
-      await orderController.completeDeliveryWithProof(req, res);
-    }
-  );
-
-  // 10. Adjuntar o actualizar comprobante de transferencia (Clientes y Administradores)
+  // 7. Adjuntar o actualizar comprobante de transferencia (Clientes y Administradores)
   router.patch(
     "/orders/:id/receipt",
     authenticate,
     requireRole(["client", "admin"]),
+    validateParams(OrderIdParamSchema),
     upload.single("receiptImage"),
     validateReceiptUpload,
     async (req, res) => {

@@ -111,23 +111,11 @@ export class UserController {
       const { id } = req.params;
       const authUser = (req as any).user;
 
-      const user = await getUserByIdUseCase.execute(id);
+      const user = await getUserByIdUseCase.execute(id, authUser);
       if (!user) {
         return res.status(404).json({
           success: false,
           message: "Usuario no encontrado",
-        });
-      }
-
-      // Prevención de BOLA/IDOR: Solo Admin, el propio usuario o el Vendedor asignado pueden consultar este perfil
-      const isOwner = authUser?.uid === id;
-      const isAdmin = authUser?.userType === "admin";
-      const isAssignedSeller = authUser?.userType === "seller" && user.sellerId === authUser?.uid;
-
-      if (!isAdmin && !isOwner && !isAssignedSeller) {
-        return res.status(403).json({
-          success: false,
-          message: "No tienes permiso para ver la información de este usuario",
         });
       }
 
@@ -136,7 +124,11 @@ export class UserController {
         user,
       });
     } catch (error: any) {
-      res.status(500).json({
+      const isForbidden =
+        error.message?.includes("permiso") ||
+        error.message?.includes("Acceso denegado");
+      const status = isForbidden ? 403 : 500;
+      res.status(status).json({
         success: false,
         message: error.message || "Error al obtener el usuario",
       });

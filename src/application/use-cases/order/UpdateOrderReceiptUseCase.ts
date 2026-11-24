@@ -1,7 +1,11 @@
 import { OrderRepository } from "../../../domain/repositories/OrderRepository";
+import { SynthIDDetectorService } from "../../../infrastructure/services/SynthIDDetectorService";
 
 export class UpdateOrderReceiptUseCase {
-  constructor(private orderRepository: OrderRepository) {}
+  constructor(
+    private orderRepository: OrderRepository,
+    private synthIDDetector: SynthIDDetectorService = new SynthIDDetectorService()
+  ) {}
 
   async execute(
     orderId: string,
@@ -14,10 +18,37 @@ export class UpdateOrderReceiptUseCase {
       throw new Error("Orden no encontrada");
     }
 
-    if (userType === "client" && order.userId !== userId) {
-      throw new Error("No tienes permiso para actualizar esta orden");
+    // 1. Verificación de permisos de usuario (Solo Admin o el Cliente propietario de la orden)
+    if (userType !== "admin") {
+      const isOwner = order.userId === userId || (order as any).userUid === userId;
+      if (!isOwner) {
+        throw new Error("No tienes permiso para actualizar esta orden");
+      }
     }
 
-    await this.orderRepository.updateReceiptImage(orderId, receiptImage);
+    // 2. Integridad de estado: solo pedidos en estado 'pending' admiten reemplazo de comprobante
+    if (userType !== "admin" && order.status !== "pending") {
+      throw new Error(
+        `No se puede actualizar el comprobante porque la orden se encuentra en estado '${order.status}'.`
+      );
+    }
+
+    // 3. Detección de comprobantes fraudulentos o sintéticos por IA
+    let aiRiskFlag = false;
+    let aiRiskScore = 0;
+    let aiRiskReason: string | undefined = undefined;
+
+    if (receiptImage) {
+      const analysis = await this.synthIDDetector.analyzeImage(receiptImage);
+      aiRiskFlag = analysis.isAIGenerated;
+      aiRiskScore = analysis.riskScore;
+      aiRiskReason = analysis.isAIGenerated ? analysis.reason : undefined;
+    }
+
+    await this.orderRepository.updateReceiptImage(orderId, receiptImage, {
+      aiRiskFlag,
+      aiRiskScore,
+      aiRiskReason,
+    });
   }
 }

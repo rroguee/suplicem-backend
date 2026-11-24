@@ -4,7 +4,7 @@ export const CreateTripSchema = z.object({
   tripNumber: z.string().min(1, "tripNumber es requerido"),
   orderIds: z
     .array(z.string().min(1))
-    .min(1, "Debe incluir al menos una orden")
+    .length(1, "Un viaje solo puede pertenecer a una única orden de cliente")
     .transform((ids) => [...new Set(ids)]), 
   driverId: z.string().optional(),
   comments: z.string().optional(),
@@ -98,3 +98,8 @@ export const GetTripDirectionsQuerySchema = z.object({
   destLat: z.coerce.number().min(-90).max(90, "destLat debe estar entre -90 y 90"),
   destLng: z.coerce.number().min(-180).max(180, "destLng debe estar entre -180 y 180"),
 });
+
+export const TripIdParamSchema = z.object({
+  id: z.string().trim().min(3, "ID de viaje inválido"),
+});
+

@@ -21,6 +21,27 @@ export class GetDriverActiveTripUseCase {
     }
 
     // Retorna el viaje activo completamente enriquecido con sus órdenes
-    return await this.tripRepo.getByIdWithOrders(activeTrip.id);
+    const tripWithOrders = await this.tripRepo.getByIdWithOrders(activeTrip.id);
+    if (!tripWithOrders) return null;
+
+    const sanitized = { ...tripWithOrders };
+    // Principio de Menor Privilegio: Retirar PIN y datos bancarios/financieros al chofer
+    delete sanitized.deliveryPin;
+
+    if (Array.isArray(sanitized.orders)) {
+      sanitized.orders = sanitized.orders.map((o: any) => {
+        const orderCopy = { ...o };
+        delete orderCopy.receiptImage;
+        delete orderCopy.bankAccountId;
+        delete orderCopy.bankReferenceNumber;
+        delete orderCopy.creditNote;
+        delete orderCopy.aiRiskFlag;
+        delete orderCopy.aiRiskScore;
+        delete orderCopy.aiRiskReason;
+        return orderCopy;
+      });
+    }
+
+    return sanitized;
   }
 }

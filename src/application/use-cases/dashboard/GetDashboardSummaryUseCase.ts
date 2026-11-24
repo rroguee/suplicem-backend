@@ -133,7 +133,11 @@ export class GetDashboardSummaryUseCase {
               driversCount: activeDrivers.length,
               sellersCount: sellers.length,
               pendingUsersCount: totalPending || pendingUsers.length,
-              aiRiskCount: totalAiRisk,
+              aiRiskCount:
+                totalAiRisk ||
+                [...new Map([...recentClients, ...pendingUsers].map((u) => [u.uid, u])).values()].filter(
+                  (u: any) => Boolean(u.aiRiskFlag)
+                ).length,
             })),
           ]);
 

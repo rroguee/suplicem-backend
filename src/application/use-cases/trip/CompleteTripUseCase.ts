@@ -3,6 +3,7 @@ import { OrderRepository } from "../../../domain/repositories/OrderRepository";
 import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { NotificationDispatcherService } from "../../services/NotificationDispatcherService";
 import { GetDashboardSummaryUseCase } from "../dashboard/GetDashboardSummaryUseCase";
+import { WebSocketServer } from "../../../infrastructure/websocket/WebSocketServer";
 
 export class CompleteTripUseCase {
   constructor(
@@ -38,15 +39,15 @@ export class CompleteTripUseCase {
         throw new Error("No tienes permiso para completar este viaje porque no eres el conductor asignado.");
       }
 
-      // Regla de seguridad estilo Uber: el chofer debe proveer el PIN del cliente
+      // Regla de seguridad estilo Uber: el chofer debe proveer obligatoriamente el PIN del cliente
       if (!trip.deliveryPin) {
-        throw new Error("El viaje no cuenta con un código de entrega asignado. Contacta al administrador.");
+        throw new Error("El viaje no cuenta con un código de entrega asignado. Contacta a soporte por WhatsApp o correo electrónico.");
       }
       if (!deliveryPin || deliveryPin.trim() !== trip.deliveryPin.trim()) {
-        throw new Error("Código de entrega incorrecto. Solicita al cliente el código de 4 dígitos para completar el viaje.");
+        throw new Error("Código de confirmación incorrecto o no suministrado. Solicita al cliente el código de 4 dígitos. Si el cliente no dispone del código, contacta a soporte por WhatsApp o correo electrónico.");
       }
     }
-    // Nota: El administrador (userRole === 'admin') no requiere PIN (mecanismo de contingencia)
+    // Poder de Administrador: El usuario con rol 'admin' puede completar cualquier viaje en contingencia sin requerir PIN
 
     if (trip.status !== "started") {
       throw new Error(
@@ -55,6 +56,7 @@ export class CompleteTripUseCase {
     }
 
     await this.tripRepo.completeTrip(tripId);
+    WebSocketServer.notifyTripCompleted(tripId);
 
     if (this.notificationDispatcher && this.orderRepo && trip.orderIds?.length) {
       const assignedDriverId =

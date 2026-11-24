@@ -53,13 +53,28 @@ export class UpdateOrderStatusUseCase {
       throw new Error("El motivo de rechazo debe tener al menos 5 caracteres");
     }
 
-    if (status === "completed") {
-      const order = await this.orderRepo.getById(orderId);
-      if (!order) {
-        throw new Error("Orden no encontrada");
+    const order = await this.orderRepo.getById(orderId);
+    if (!order) {
+      throw new Error("Orden no encontrada");
+    }
+
+    // Regla de Integridad de Transición de Estados:
+    if (status === "approved" || status === "rejected") {
+      if (order.status !== "pending") {
+        throw new Error(
+          `Transición no permitida: no se puede cambiar a '${status}' una orden que se encuentra en '${order.status}'.`
+        );
       }
-      if (order.status === "rejected" || order.status === "canceled") {
-        throw new Error("No se puede completar una orden cancelada o rechazada");
+    }
+
+    if (status === "completed") {
+      if (order.status === "completed") {
+        return;
+      }
+      if (order.status !== "approved") {
+        throw new Error(
+          `Transición no permitida: la orden debe haber sido aprobada ('approved') antes de poder completarse (estado actual: '${order.status}').`
+        );
       }
       await this.orderRepo.updateStatus(orderId, "completed");
 
@@ -116,8 +131,7 @@ export class UpdateOrderStatusUseCase {
 
     if (status === "approved" && this.tripRepo) {
       try {
-        const order = await this.orderRepo.getById(orderId);
-        if (order && order.deliveryType === "domicilio") {
+        if (order.deliveryType === "domicilio") {
           const existingTrip = await this.tripRepo.getTripByOrderId(orderId);
           if (!existingTrip || existingTrip.status === "canceled") {
             const baseTripNumber = `TRIP-${order.orderNumber || orderId.slice(0, 6).toUpperCase()}`;

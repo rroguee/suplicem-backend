@@ -45,8 +45,9 @@ export class MarkDeliveryCompletedUseCase {
         const trip = await this.tripRepo.getTripByOrderId(orderId);
         const assignedDriver =
           trip?.assignedDriverId || (trip as any)?.driverId || trip?.driver?.id || trip?.driver?.uid;
-        if (!trip || assignedDriver !== userId) {
-          throw new Error("No tienes permiso para completar entregas en esta orden porque no eres el conductor asignado.");
+        const isTripActive = trip && ["accepted", "started", "in_progress"].includes(trip.status);
+        if (!trip || assignedDriver !== userId || !isTripActive) {
+          throw new Error("No tienes permiso para completar entregas en esta orden porque no cuentas con un viaje activo asignado.");
         }
       }
     }

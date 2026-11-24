@@ -63,9 +63,21 @@ export const validateReceiptUpload = (
     return next();
   }
 
-  // 2. Si envió una URL o base64 en el cuerpo JSON
+  // 2. Si envió una URL o base64 en el cuerpo JSON: validar formato estricto
   if (bodyReceipt && typeof bodyReceipt === "string" && bodyReceipt.trim().length > 10) {
-    return next();
+    const trimmed = bodyReceipt.trim();
+    const isDataUri = /^data:image\/(jpeg|png|webp|jpg);base64,[A-Za-z0-9+/=]+$/i.test(trimmed);
+    const isSecureStorageUrl = /^https:\/\/(firebasestorage\.googleapis\.com|storage\.googleapis\.com)\/.+$/i.test(trimmed);
+
+    if (isDataUri || isSecureStorageUrl) {
+      return next();
+    }
+
+    res.status(400).json({
+      success: false,
+      message: "El comprobante debe ser una imagen válida en Base64 o una URL segura de almacenamiento (HTTPS)",
+    });
+    return;
   }
 
   // 3. Si no adjuntó archivo ni string válido

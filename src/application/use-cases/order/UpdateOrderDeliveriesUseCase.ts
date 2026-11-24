@@ -24,9 +24,9 @@ export class UpdateOrderDeliveriesUseCase {
       throw new Error("Orden no encontrada");
     }
 
-    if (order.status === "rejected") {
+    if (["rejected", "completed", "canceled"].includes(order.status)) {
       throw new Error(
-        "No se pueden modificar las entregas de una orden rechazada."
+        `No se pueden modificar las entregas de una orden en estado '${order.status}'.`
       );
     }
 

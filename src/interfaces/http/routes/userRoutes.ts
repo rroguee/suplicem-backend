@@ -26,8 +26,8 @@ export const userRoutes = (router: Router) => {
   router.post(
     "/users",
     upload.any(),
-    normalizeUserData,
     authenticateOptional,
+    normalizeUserData,
     validate(CreateUserSchema),
     (req, res) => {
       userController.create(req, res);
