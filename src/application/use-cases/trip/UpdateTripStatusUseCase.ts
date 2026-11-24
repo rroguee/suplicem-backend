@@ -60,8 +60,10 @@ export class UpdateTripStatusUseCase {
       in_progress: ["completed", "canceled", "started"],
     };
 
+    // Administrador: Permite completar directamente cualquier viaje activo no terminal como mecanismo de contingencia
+    const isAdminForceComplete = userRole === "admin" && targetStatus === "completed";
     const allowed = allowedTransitions[currentStatus] || [];
-    if (!allowed.includes(targetStatus)) {
+    if (!allowed.includes(targetStatus) && !isAdminForceComplete) {
       throw new Error(
         `Transición no permitida: no se puede cambiar un viaje de '${currentStatus}' a '${targetStatus}'.`
       );
