@@ -8,7 +8,7 @@ import { RecoverPasswordUseCase } from "../../../application/use-cases/auth/Reco
 import { ResendVerificationUseCase } from "../../../application/use-cases/auth/ResendVerificationUseCase";
 import { RegistrationBotService } from "../../../infrastructure/services/RegistrationBotService";
 import { OtpFirestoreRepository } from "../../../infrastructure/firestore/OtpFirestoreRepository";
-import { TwilioSmsService } from "../../../infrastructure/services/TwilioSmsService";
+import { createSmsService } from "../../../infrastructure/services/SmsServiceFactory";
 import { RequestOtpUseCase } from "../../../application/use-cases/auth/RequestOtpUseCase";
 import { VerifyOtpUseCase } from "../../../application/use-cases/auth/VerifyOtpUseCase";
 import { RegisterWithPhoneUseCase } from "../../../application/use-cases/auth/RegisterWithPhoneUseCase";
@@ -16,7 +16,7 @@ import { RegisterWithPhoneUseCase } from "../../../application/use-cases/auth/Re
 const authService = new FirebaseAuthService();
 const userRepo = new UserFirestoreRepository();
 const otpRepo = new OtpFirestoreRepository();
-const smsService = new TwilioSmsService();
+const smsService = createSmsService();
 const botService = new RegistrationBotService();
 
 export class AuthController {
@@ -27,11 +27,12 @@ export class AuthController {
     private getCurrentUserUseCase = new GetCurrentUserUseCase(userRepo),
     private resendVerificationUseCase = new ResendVerificationUseCase(authService, botService),
     private requestOtpUseCase = new RequestOtpUseCase(userRepo, otpRepo, smsService),
-    private verifyOtpUseCase = new VerifyOtpUseCase(otpRepo, userRepo, authService),
+    private verifyOtpUseCase = new VerifyOtpUseCase(otpRepo, userRepo, authService, smsService),
     private registerWithPhoneUseCase = new RegisterWithPhoneUseCase(
       otpRepo,
       userRepo,
-      authService
+      authService,
+      smsService
     )
   ) {}
 

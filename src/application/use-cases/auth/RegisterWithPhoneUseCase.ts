@@ -4,6 +4,7 @@ import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { AuthService } from "../../../domain/services/AuthService";
 import { normalizeDominicanPhone } from "../../../domain/services/PhoneService";
 import { verifyOtpHash } from "../../../domain/services/OtpCryptoService";
+import { SmsService } from "../../../domain/services/SmsService";
 import {
   isValidDominicanCedula,
   isValidPassport,
@@ -34,7 +35,8 @@ export class RegisterWithPhoneUseCase {
   constructor(
     private otpRepo: OtpRepository,
     private userRepo: UserRepository,
-    private authService: AuthService
+    private authService: AuthService,
+    private smsService?: SmsService
   ) {}
 
   private buildUid(phone: string): string {
@@ -81,7 +83,16 @@ export class RegisterWithPhoneUseCase {
       );
     }
 
-    if (!verifyOtpHash(phone, data.code, challenge.codeHash)) {
+    const smsService = this.smsService;
+    let isValid: boolean;
+
+    if (smsService?.checkOtpVerification) {
+      isValid = await smsService.checkOtpVerification(phone, data.code);
+    } else {
+      isValid = verifyOtpHash(phone, data.code, challenge.codeHash);
+    }
+
+    if (!isValid) {
       await this.otpRepo.save({
         ...challenge,
         attempts: challenge.attempts + 1,

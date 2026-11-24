@@ -4,6 +4,7 @@ import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { AuthService } from "../../../domain/services/AuthService";
 import { normalizeDominicanPhone } from "../../../domain/services/PhoneService";
 import { verifyOtpHash } from "../../../domain/services/OtpCryptoService";
+import { SmsService } from "../../../domain/services/SmsService";
 
 const MAX_ATTEMPTS = 5;
 
@@ -11,7 +12,8 @@ export class VerifyOtpUseCase {
   constructor(
     private otpRepo: OtpRepository,
     private userRepo: UserRepository,
-    private authService: AuthService
+    private authService: AuthService,
+    private smsService?: SmsService
   ) {}
 
   async execute(phoneInput: string, code: string) {
@@ -52,7 +54,16 @@ export class VerifyOtpUseCase {
       );
     }
 
-    if (!verifyOtpHash(phone, code, challenge.codeHash)) {
+    const smsService = this.smsService;
+    let isValid: boolean;
+
+    if (smsService?.checkOtpVerification) {
+      isValid = await smsService.checkOtpVerification(phone, code);
+    } else {
+      isValid = verifyOtpHash(phone, code, challenge.codeHash);
+    }
+
+    if (!isValid) {
       await this.otpRepo.save({
         ...challenge,
         attempts: challenge.attempts + 1,
