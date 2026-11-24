@@ -45,13 +45,15 @@ export class RequestOtpUseCase {
       }
     }
 
-    const code = generateOtpCode();
+    const startVerification = this.smsService.startOtpVerification;
+    const useVerify = typeof startVerification === "function";
+    const code = useVerify ? "" : generateOtpCode();
     const now = Date.now();
 
     const challenge: OtpChallenge = {
       phone,
       uid: user?.uid || "",
-      codeHash: hashOtp(phone, code),
+      codeHash: useVerify ? "" : hashOtp(phone, code),
       attempts: 0,
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
@@ -60,7 +62,11 @@ export class RequestOtpUseCase {
 
     await this.otpRepo.save(challenge);
 
-    await this.smsService.sendOtp(phone, code);
+    if (startVerification) {
+      await startVerification.call(this.smsService, phone);
+    } else {
+      await this.smsService.sendOtp(phone, code);
+    }
 
     return {
       success: true,

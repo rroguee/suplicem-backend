@@ -53,6 +53,21 @@ export class UpdateUserUseCase {
     if (userToUpdate.identificationImage !== undefined) {
       sanitizedUpdate.identificationImage = userToUpdate.identificationImage;
     }
+    if (userToUpdate.notifications !== undefined) {
+      sanitizedUpdate.notifications = {
+        ...(existingUser.notifications || {}),
+        ...userToUpdate.notifications,
+      };
+      if (userToUpdate.notifications.whatsapp === true) {
+        sanitizedUpdate.whatsappOptInAt =
+          existingUser.whatsappOptInAt || new Date().toISOString();
+      } else if (userToUpdate.notifications.whatsapp === false) {
+        sanitizedUpdate.whatsappOptInAt = "";
+      }
+    }
+    if (userToUpdate.expoPushToken !== undefined) {
+      sanitizedUpdate.expoPushToken = userToUpdate.expoPushToken || "";
+    }
     // Permitir exclusivamente al Administrador asignar o limpiar el vendedor
     if (isAuthorizedAdmin && userToUpdate.sellerId !== undefined) {
       sanitizedUpdate.sellerId = userToUpdate.sellerId ? userToUpdate.sellerId.trim() : null as any;

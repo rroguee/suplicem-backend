@@ -29,6 +29,15 @@ export interface User {
   };
   createdAt: string;
   status: "pending" | "active" | "inactive" | "banned" | "rejected";
+  notifications?: {
+    sms?: boolean;
+    email?: boolean;
+    push?: boolean;
+    inApp?: boolean;
+    whatsapp?: boolean;
+  };
+  whatsappOptInAt?: string;
+  expoPushToken?: string;
   driverCode?: string;
   sellerCode?: string;
   sellerId?: string;

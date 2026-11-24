@@ -109,6 +109,18 @@ OTP_HASH_SECRET=clave_criptografica_segura_para_hash_otp
 > cuenta paga. Para enviar el texto personalizado también hay que actualizar la
 > cuenta.
 
+### Datos en Firestore (notificaciones y logs)
+
+- **`notifications`**: notificaciones in-app. El cambio de estado de cuenta crea
+  `type: "account_status_changed"` con `category: "account"`.
+- **`messageLogs`**: auditoría de cada SMS (Twilio SID, plantilla, estado y error).
+  Los códigos OTP se guardan redactados.
+- **`users/{uid}`**: campos opcionales `notifications` (`sms`, `email`, `push`,
+  `inApp`), `whatsappOptInAt` y `expoPushToken`. Si `notifications.sms` o
+  `notifications.inApp` es `false`, se omite ese canal.
+- **Reglas**: `firestore.rules` bloquea todo acceso desde SDK de cliente; solo el
+  Admin SDK del backend escribe.
+
 ---
 
 ## 🌐 3. Panel Web Administrativo (`suplicem-admin`)

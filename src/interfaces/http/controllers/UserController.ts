@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { UserFirestoreRepository } from "../../../infrastructure/firestore/UserFirestoreRepository";
 import { FirebaseAuthService } from "../../../infrastructure/services/FirebaseAuthService";
-import { TwilioSmsService } from "../../../infrastructure/services/TwilioSmsService";
+import { createSmsService } from "../../../infrastructure/services/SmsServiceFactory";
 import { CreateUserUseCase } from "../../../application/use-cases/user/CreateUserUseCase";
 import { GetAllUsersUseCase } from "../../../application/use-cases/user/GetAllUsersUseCase";
 import { GetUserByIdUseCase } from "../../../application/use-cases/user/GetUserByIdUseCase";
@@ -21,11 +21,17 @@ const userRepo = new UserFirestoreRepository();
 const authService = new FirebaseAuthService();
 const notificationRepo = new NotificationFirestoreRepository();
 const notificationDispatcher = new NotificationDispatcherService(notificationRepo);
-const smsService = new TwilioSmsService();
+const smsService = createSmsService();
 const createUserUseCase = new CreateUserUseCase(userRepo, authService, notificationDispatcher);
 const getAllUsersUseCase = new GetAllUsersUseCase(userRepo);
 const getUserByIdUseCase = new GetUserByIdUseCase(userRepo);
-const updateUserStatusUseCase = new UpdateUserStatusUseCase(userRepo, authService, smsService);
+const updateUserStatusUseCase = new UpdateUserStatusUseCase(
+  userRepo,
+  authService,
+  smsService,
+  undefined,
+  notificationDispatcher
+);
 const updateUserUseCase = new UpdateUserUseCase(userRepo, notificationDispatcher);
 const verifyCedulaUseCase = new VerifyCedulaUseCase(
   new JceIdentityService(),
