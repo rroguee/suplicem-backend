@@ -24,6 +24,7 @@ export interface CreateOrderDto {
   creditNote?: string;                    
   comments?: string;
   receiptImage?: string;
+  receiptBuffer?: Buffer;
   idempotencyKey?: string;
   createdBySellerId?: string;
   createdByAdminId?: string;

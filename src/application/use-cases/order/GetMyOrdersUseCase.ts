@@ -50,13 +50,57 @@ export class GetMyOrdersUseCase {
       return numB - numA;
     });
 
-    // 4. Enriquecer con los datos del usuario (consultando el usuario UNA sola vez)
+    // 4. Enriquecer con los datos del cliente y creadores asistidos (Anti N+1 con batch fetch)
     const user = await this.userRepo.getById(userId);
 
-    return orders.map((order) => ({
-      ...order,
-      userNames: user?.names || (order as any).userNames || "",
-      userLastNames: user?.lastNames || (order as any).userLastNames || "",
-    }));
+    const creatorIds = [
+      ...new Set(
+        orders
+          .map((o) => (o.createdBySellerId || o.createdByAdminId)?.trim())
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+
+    const creatorMap = new Map<string, { names?: string; lastNames?: string; phone?: string }>();
+    if (creatorIds.length > 0) {
+      await Promise.all(
+        creatorIds.map(async (cId) => {
+          try {
+            const creator = await this.userRepo.getById(cId);
+            if (creator) {
+              creatorMap.set(cId, creator);
+            }
+          } catch (e) {
+            console.warn(`Error al obtener creador ${cId}:`, e);
+          }
+        })
+      );
+    }
+
+    return orders.map((order) => {
+      const isAssisted = Boolean(order.createdBySellerId || order.createdByAdminId);
+      const cId = (order.createdBySellerId || order.createdByAdminId)?.trim();
+      const creator = cId ? creatorMap.get(cId) : undefined;
+      const createdByRole = order.createdBySellerId ? "seller" : order.createdByAdminId ? "admin" : undefined;
+      const createdByName = creator
+        ? `${creator.names} ${creator.lastNames || ""}`.trim()
+        : isAssisted
+        ? (createdByRole === "seller" ? "Vendedor Asignado" : "Administrador")
+        : undefined;
+      const createdByPhone = creator?.phone;
+
+      // Principio Anti-Oracle: Sanitizar flags de riesgo de IA para el cliente
+      const sanitized = { ...order };
+      delete (sanitized as any).aiRiskFlag;
+      delete (sanitized as any).aiRiskScore;
+      delete (sanitized as any).aiRiskReason;
+
+      return {
+        ...sanitized,
+        userNames: user?.names || (order as any).userNames || "",
+        userLastNames: user?.lastNames || (order as any).userLastNames || "",
+        ...(isAssisted ? { isAssisted, createdByName, createdByRole, createdByPhone } : {}),
+      };
+    });
   }
 }

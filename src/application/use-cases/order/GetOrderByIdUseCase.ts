@@ -1,12 +1,14 @@
 import { Order } from "../../../domain/entities/Order";
 import { OrderRepository } from "../../../domain/repositories/OrderRepository";
 import { TripRepository } from "../../../domain/repositories/TripRepository";
+import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { ApplicationActor } from "../../dtos/UserDtos";
 
 export class GetOrderByIdUseCase {
   constructor(
     private orderRepo: OrderRepository,
-    private tripRepo?: TripRepository
+    private tripRepo?: TripRepository,
+    private userRepo?: UserRepository
   ) {}
 
   async execute(
@@ -26,9 +28,37 @@ export class GetOrderByIdUseCase {
       throw new Error("Acceso denegado: usuario no autenticado.");
     }
 
-    // Administrador: Acceso total de gestión
+    // Administrador: Acceso total de gestión y enriquecimiento exclusivo de asistencia
     if (authUser.userType === "admin") {
-      return order;
+      let isAssisted = false;
+      let createdByName: string | undefined = undefined;
+      let createdByRole: "seller" | "admin" | undefined = undefined;
+      let createdByPhone: string | undefined = undefined;
+
+      const creatorId = order.createdBySellerId || order.createdByAdminId;
+      if (creatorId && typeof creatorId === "string" && creatorId.trim()) {
+        isAssisted = true;
+        createdByRole = order.createdBySellerId ? "seller" : "admin";
+        if (this.userRepo) {
+          try {
+            const creator = await this.userRepo.getById(creatorId.trim());
+            if (creator) {
+              createdByName = `${creator.names} ${creator.lastNames || ""}`.trim();
+              createdByPhone = creator.phone;
+            }
+          } catch (e) {
+            console.warn(`Error al obtener creador ${creatorId}:`, e);
+          }
+        }
+        if (!createdByName) {
+          createdByName = createdByRole === "seller" ? "Vendedor Asignado" : "Administrador";
+        }
+      }
+
+      return {
+        ...order,
+        ...(isAssisted ? { isAssisted, createdByName, createdByRole, createdByPhone } : {}),
+      };
     }
 
     const sanitizeOrder = (ord: Order, isDriver: boolean = false): Order => {
@@ -37,23 +67,58 @@ export class GetOrderByIdUseCase {
       delete sanitized.aiRiskScore;
       delete sanitized.aiRiskReason;
 
-      // Principio de Menor Privilegio: Un chofer no requiere acceso a comprobantes ni cuentas bancarias
+      // Principio de Menor Privilegio: Un chofer no requiere acceso a comprobantes ni cuentas bancarias ni asistencia
       if (isDriver) {
         delete sanitized.receiptImage;
         delete sanitized.bankAccountId;
         delete sanitized.bankReferenceNumber;
         delete sanitized.creditNote;
+        delete sanitized.isAssisted;
+        delete sanitized.createdByName;
+        delete sanitized.createdByRole;
+        delete sanitized.createdByPhone;
       }
       return sanitized;
     };
 
-    // 1. Regla Cliente: solo sus propios pedidos
+    // 1. Regla Cliente: solo sus propios pedidos con enriquecimiento transparente de asistencia
     if (authUser.userType === "client") {
       const isOwner = order.userId === authUser.uid || (order as any).userUid === authUser.uid;
       if (!isOwner) {
         throw new Error("No tienes permiso para ver esta orden.");
       }
-      return sanitizeOrder(order);
+
+      let isAssisted = false;
+      let createdByName: string | undefined = undefined;
+      let createdByRole: "seller" | "admin" | undefined = undefined;
+      let createdByPhone: string | undefined = undefined;
+
+      const creatorId = order.createdBySellerId || order.createdByAdminId;
+      if (creatorId && typeof creatorId === "string" && creatorId.trim()) {
+        isAssisted = true;
+        createdByRole = order.createdBySellerId ? "seller" : "admin";
+        if (this.userRepo) {
+          try {
+            const creator = await this.userRepo.getById(creatorId.trim());
+            if (creator) {
+              createdByName = `${creator.names} ${creator.lastNames || ""}`.trim();
+              createdByPhone = creator.phone;
+            }
+          } catch (e) {
+            console.warn(`Error al obtener creador ${creatorId} para cliente:`, e);
+          }
+        }
+        if (!createdByName) {
+          createdByName = createdByRole === "seller" ? "Vendedor Asignado" : "Administrador";
+        }
+      }
+
+      const clientOrder = {
+        ...order,
+        ...(isAssisted ? { isAssisted, createdByName, createdByRole, createdByPhone } : {}),
+      };
+
+      return sanitizeOrder(clientOrder);
     }
 
     // 2. Regla Vendedor: solo pedidos de su cartera o creados por él

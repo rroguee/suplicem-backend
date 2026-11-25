@@ -11,7 +11,8 @@ export class UpdateOrderReceiptUseCase {
     orderId: string,
     receiptImage: string,
     userId?: string,
-    userType?: string
+    userType?: string,
+    receiptBuffer?: Buffer
   ): Promise<void> {
     const order = await this.orderRepository.getById(orderId);
     if (!order) {
@@ -33,13 +34,14 @@ export class UpdateOrderReceiptUseCase {
       );
     }
 
-    // 3. Detección de comprobantes fraudulentos o sintéticos por IA
+    // 3. Detección de comprobantes fraudulentos o sintéticos por IA (Prioriza buffer en RAM)
     let aiRiskFlag = false;
     let aiRiskScore = 0;
     let aiRiskReason: string | undefined = undefined;
 
-    if (receiptImage) {
-      const analysis = await this.synthIDDetector.analyzeImage(receiptImage);
+    const imageToAnalyze = receiptBuffer || receiptImage;
+    if (imageToAnalyze) {
+      const analysis = await this.synthIDDetector.analyzeImage(imageToAnalyze);
       aiRiskFlag = analysis.isAIGenerated;
       aiRiskScore = analysis.riskScore;
       aiRiskReason = analysis.isAIGenerated ? analysis.reason : undefined;

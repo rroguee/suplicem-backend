@@ -47,8 +47,48 @@ export class SynthIDDetectorService {
     "inpainting", "face_swap", "face_parser", "neural_filter", "canvas_ai", "steganography"
   ];
 
-  async analyzeImage(base64OrUriImage: string): Promise<SynthIDAnalysisResult> {
-    if (!base64OrUriImage || base64OrUriImage.length < 50) {
+  async analyzeImage(input: string | Buffer): Promise<SynthIDAnalysisResult> {
+    if (!input) {
+      return {
+        isAIGenerated: false,
+        riskScore: 0,
+        confidence: 100,
+        reason: "Imagen limpia / Sin alteración",
+        detectedSignatures: [],
+      };
+    }
+
+    let imageBuffer: Buffer = Buffer.alloc(0);
+
+    // 1. Extraer o descargar Buffer de imagen de forma eficiente
+    if (Buffer.isBuffer(input)) {
+      imageBuffer = input;
+    } else if (typeof input === "string") {
+      const trimmed = input.trim();
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          const response = await fetch(trimmed, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuffer);
+          }
+        } catch {
+          imageBuffer = Buffer.alloc(0);
+        }
+      } else {
+        const cleanBase64 = trimmed.replace(/^data:image\/\w+;base64,/, "");
+        try {
+          imageBuffer = Buffer.from(cleanBase64, "base64");
+        } catch {
+          imageBuffer = Buffer.alloc(0);
+        }
+      }
+    }
+
+    if (!imageBuffer || imageBuffer.length < 50) {
       return {
         isAIGenerated: false,
         riskScore: 0,
@@ -61,28 +101,26 @@ export class SynthIDDetectorService {
     const detectedSignatures: string[] = [];
     let riskScore = 0;
 
-    // 1. Extraer payload Base64 limpio
-    const cleanBase64 = base64OrUriImage.replace(/^data:image\/\w+;base64,/, "");
-    const lowerBase64 = cleanBase64.toLowerCase();
+    // 2. Extraer metadatos del binario (primeros 128 KB y últimos 32 KB) usando vistas ligeras
+    const headerBuffer = imageBuffer.subarray(0, 131072);
+    const footerBuffer =
+      imageBuffer.length > 131072
+        ? imageBuffer.subarray(imageBuffer.length - 32768)
+        : Buffer.alloc(0);
 
-    // 2. Extraer metadatos del binario (primeros 128 KB y últimos 32 KB)
-    let imageBuffer: Buffer;
-    try {
-      imageBuffer = Buffer.from(cleanBase64, "base64");
-    } catch {
-      imageBuffer = Buffer.alloc(0);
-    }
-
-    const header = imageBuffer.subarray(0, 131072).toString("latin1").toLowerCase();
-    const footer = imageBuffer.length > 131072
-      ? imageBuffer.subarray(imageBuffer.length - 32768).toString("latin1").toLowerCase()
-      : "";
+    const header = headerBuffer.toString("latin1").toLowerCase();
+    const footer = footerBuffer.toString("latin1").toLowerCase();
     const meta = `${header} ${footer}`;
+
+    // Vista acotada en Base64 para buscar firmas sintéticas sin saturar el heap de V8
+    const headerBase64 = headerBuffer.toString("base64").toLowerCase();
+    const footerBase64 = footerBuffer.toString("base64").toLowerCase();
+    const base64Meta = `${headerBase64} ${footerBase64}`;
 
     // 1. SynthID / Google Gemini
     if (
       SynthIDDetectorService.SYNTHID_KEYWORDS.some((kw) => meta.includes(kw)) ||
-      SynthIDDetectorService.SYNTHID_BASE64.some((pat) => lowerBase64.includes(pat))
+      SynthIDDetectorService.SYNTHID_BASE64.some((pat) => base64Meta.includes(pat))
     ) {
       detectedSignatures.push("Marca de agua digital SynthID (Google Gemini AI)");
       riskScore += 95;
@@ -91,7 +129,7 @@ export class SynthIDDetectorService {
     // 2. C2PA / Content Credentials
     if (
       SynthIDDetectorService.C2PA_KEYWORDS.some((kw) => meta.includes(kw)) ||
-      SynthIDDetectorService.C2PA_BASE64.some((pat) => lowerBase64.includes(pat))
+      SynthIDDetectorService.C2PA_BASE64.some((pat) => base64Meta.includes(pat))
     ) {
       detectedSignatures.push("Firma de contenido sintético C2PA / Content Credentials");
       riskScore += 90;
@@ -100,7 +138,7 @@ export class SynthIDDetectorService {
     // 3. OpenAI / DALL-E / Bing
     if (
       SynthIDDetectorService.OPENAI_KEYWORDS.some((kw) => meta.includes(kw)) ||
-      SynthIDDetectorService.OPENAI_BASE64.some((pat) => lowerBase64.includes(pat))
+      SynthIDDetectorService.OPENAI_BASE64.some((pat) => base64Meta.includes(pat))
     ) {
       detectedSignatures.push("Generador de IA OpenAI (DALL-E / ChatGPT / Bing)");
       riskScore += 90;
@@ -133,12 +171,15 @@ export class SynthIDDetectorService {
       meta.includes("apple") || meta.includes("samsung") || meta.includes("xiaomi") ||
       meta.includes("motorola") || meta.includes("iphone") || meta.includes("exif");
 
-    if (!hasCameraMake && cleanBase64.length > 2000) {
+    if (!hasCameraMake && imageBuffer.length > 1500) {
       riskScore += 25;
     }
 
-    // 8. Entropía espectral en muestra base64 (muestra reducida de 4000 caracteres)
-    const sampleChunk = cleanBase64.slice(50, 4000);
+    // 8. Entropía espectral en muestra base64 (muestra reducida de cabecera)
+    const sampleChunk = headerBuffer
+      .subarray(0, Math.min(headerBuffer.length, 3000))
+      .toString("base64")
+      .slice(50, 4000);
     const zeroCount = (sampleChunk.match(/0/g) || []).length;
     const oneCount = (sampleChunk.match(/1/g) || []).length;
     const letterACount = (sampleChunk.match(/a/gi) || []).length;

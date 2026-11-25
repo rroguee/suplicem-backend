@@ -143,13 +143,14 @@ export class CreateUserUseCase {
         throw new Error("Debes adjuntar la foto de tu cédula o pasaporte para completar tu registro.");
       }
 
-      // Analizar la foto de la identificación con el filtro SynthID
+      // Analizar la foto de la identificación con el filtro SynthID (Prioriza buffer en RAM)
       let aiRiskFlag = false;
       let aiRiskScore = 0;
       let aiRiskReason = "";
 
-      if (identificationImageUrl) {
-        const analysis = await this.synthIDDetector.analyzeImage(identificationImageUrl);
+      const imageToAnalyze = file?.buffer || identificationImageUrl;
+      if (imageToAnalyze) {
+        const analysis = await this.synthIDDetector.analyzeImage(imageToAnalyze);
         aiRiskFlag = analysis.isAIGenerated;
         aiRiskScore = analysis.riskScore;
         aiRiskReason = analysis.reason;

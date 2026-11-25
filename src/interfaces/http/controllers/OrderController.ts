@@ -42,7 +42,7 @@ export class OrderController {
     ),
     private getMyOrdersUseCase = new GetMyOrdersUseCase(orderRepo, userRepo),
     private getOrderTrackingUseCase = new GetOrderTrackingUseCase(orderRepo, tripRepo, locationRepo, userRepo),
-    private getOrderByIdUseCase = new GetOrderByIdUseCase(orderRepo, tripRepo),
+    private getOrderByIdUseCase = new GetOrderByIdUseCase(orderRepo, tripRepo, userRepo),
     private getAllOrdersUseCase = new GetAllOrdersUseCase(orderRepo, userRepo),
     private updateOrderStatusUseCase = new UpdateOrderStatusUseCase(orderRepo, tripRepo, userRepo, notificationDispatcher),
     private updateOrderDeliveriesUseCase = new UpdateOrderDeliveriesUseCase(orderRepo),
@@ -81,6 +81,7 @@ export class OrderController {
       const { orderId, orderNumber } = await this.createOrderUseCase.execute({
         ...req.body,
         receiptImage: receiptImageUrl,
+        receiptBuffer: req.file?.buffer,
         userId: orderUserId,
         createdBySellerId,
         createdByAdminId,
@@ -187,7 +188,7 @@ export class OrderController {
           search: typeof search === "string" ? search : undefined,
           page: page !== undefined ? Number(page) : undefined,
           limit: limit !== undefined ? Number(limit) : undefined,
-        });
+        }, authUser);
         return res.status(200).json({ success: true, ...result });
       }
 
@@ -201,7 +202,7 @@ export class OrderController {
         filters.sellerId = effectiveSellerId;
       }
 
-      const orders = await this.getAllOrdersUseCase.execute(filters);
+      const orders = await this.getAllOrdersUseCase.execute(filters, authUser);
       res.status(200).json({ success: true, orders });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message || "Error al obtener las órdenes" });
@@ -265,7 +266,13 @@ export class OrderController {
         return res.status(400).json({ success: false, message: "Debe proporcionar una imagen o archivo de comprobante" });
       }
 
-      await this.updateOrderReceiptUseCase.execute(id, receiptImageUrl, authUser?.uid, authUser?.userType);
+      await this.updateOrderReceiptUseCase.execute(
+        id,
+        receiptImageUrl,
+        authUser?.uid,
+        authUser?.userType,
+        req.file?.buffer
+      );
 
       res.status(200).json({
         success: true,

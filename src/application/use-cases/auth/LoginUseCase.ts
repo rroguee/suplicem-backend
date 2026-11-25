@@ -13,7 +13,7 @@ export class LoginUseCase {
 
     if (this.userRepo) {
       const user = await this.userRepo.getById(loginResponse.uid);
-      if (user?.status === "inactive" || user?.status === "banned") {
+      if (user?.status === "inactive" || user?.status === "banned" || user?.status === "rejected") {
         throw new Error("Tu cuenta se encuentra inactiva o suspendida. Comunícate con soporte.");
       }
     }

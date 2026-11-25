@@ -1,6 +1,7 @@
 import { UserRepository } from "../../../domain/repositories/UserRepository";
 import { OrderRepository, OrderFilters } from "../../../domain/repositories/OrderRepository";
 import { EnrichedOrder } from "../../../domain/entities/EnrichedOrder";
+import { ApplicationActor } from "../../dtos/UserDtos";
 
 export interface PaginatedOrdersQuery {
   status?: string;
@@ -37,7 +38,7 @@ export class GetAllOrdersUseCase {
     private userRepo: UserRepository
   ) {}
 
-  async execute(filters?: OrderFilters | string): Promise<EnrichedOrder[]> {
+  async execute(filters?: OrderFilters | string, actor?: ApplicationActor): Promise<EnrichedOrder[]> {
     const orders = await this.orderRepo.getAll(filters);
 
     const missingUserIds = [
@@ -54,10 +55,23 @@ export class GetAllOrdersUseCase {
       ),
     ];
 
-    const userMap = new Map<string, { names?: string; lastNames?: string }>();
-    if (missingUserIds.length > 0) {
+    const isAdmin = actor?.userType === "admin";
+    const creatorIds = isAdmin
+      ? [
+          ...new Set(
+            orders
+              .map((o) => (o.createdBySellerId || o.createdByAdminId)?.trim())
+              .filter((id): id is string => Boolean(id))
+          ),
+        ]
+      : [];
+
+    const userMap = new Map<string, { names?: string; lastNames?: string; phone?: string }>();
+    const allIdsToFetch = [...new Set([...missingUserIds, ...creatorIds])];
+
+    if (allIdsToFetch.length > 0) {
       await Promise.all(
-        missingUserIds.map(async (uid) => {
+        allIdsToFetch.map(async (uid) => {
           try {
             const user = await this.userRepo.getById(uid);
             if (user) {
@@ -76,22 +90,42 @@ export class GetAllOrdersUseCase {
           ? order.userId.trim()
           : "";
       const user = uid ? userMap.get(uid) : undefined;
+
+      let isAssisted: boolean | undefined = undefined;
+      let createdByName: string | undefined = undefined;
+      let createdByRole: "seller" | "admin" | undefined = undefined;
+      let createdByPhone: string | undefined = undefined;
+
+      if (isAdmin && (order.createdBySellerId || order.createdByAdminId)) {
+        isAssisted = true;
+        const cId = (order.createdBySellerId || order.createdByAdminId)!.trim();
+        const creator = userMap.get(cId);
+        createdByRole = order.createdBySellerId ? "seller" : "admin";
+        createdByName = creator
+          ? `${creator.names} ${creator.lastNames || ""}`.trim()
+          : (createdByRole === "seller" ? "Vendedor Asignado" : "Administrador");
+        createdByPhone = creator?.phone;
+      }
+
       return {
         ...order,
         userNames: (order as any).userNames || user?.names || "",
         userLastNames: (order as any).userLastNames || user?.lastNames || "",
+        ...(isAdmin && isAssisted
+          ? { isAssisted, createdByName, createdByRole, createdByPhone }
+          : {}),
       };
     });
   }
 
-  async executePaginated(query: PaginatedOrdersQuery): Promise<PaginatedOrdersResult> {
+  async executePaginated(query: PaginatedOrdersQuery, actor?: ApplicationActor): Promise<PaginatedOrdersResult> {
     const baseFilters: OrderFilters = {};
     if (query.deliveryType) baseFilters.deliveryType = query.deliveryType;
     if (query.userId) baseFilters.userId = query.userId;
     if (query.withoutTrip !== undefined) baseFilters.withoutTrip = query.withoutTrip;
     if (query.sellerId) baseFilters.sellerId = query.sellerId;
 
-    const allScoped = await this.execute(baseFilters);
+    const allScoped = await this.execute(baseFilters, actor);
     const priority: Record<string, number> = {
       pending: 1,
       approved: 2,

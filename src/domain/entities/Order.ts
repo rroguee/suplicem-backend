@@ -61,4 +61,8 @@ export interface Order {
   sellerId?: string;
   createdBySellerId?: string;
   createdByAdminId?: string;
+  isAssisted?: boolean;
+  createdByName?: string;
+  createdByRole?: "seller" | "admin";
+  createdByPhone?: string;
 }

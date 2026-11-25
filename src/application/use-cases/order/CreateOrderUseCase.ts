@@ -51,13 +51,14 @@ export class CreateOrderUseCase {
       }
     }
 
-    // 3. Análisis de riesgo del comprobante con IA
+    // 3. Análisis de riesgo del comprobante con IA (Prioriza buffer en RAM para evitar latencia)
     let aiRiskFlag = false;
     let aiRiskScore = 0;
     let aiRiskReason = "";
 
-    if (data.receiptImage) {
-      const analysis = await this.synthIDDetector.analyzeImage(data.receiptImage);
+    const imageToAnalyze = data.receiptBuffer || data.receiptImage;
+    if (imageToAnalyze) {
+      const analysis = await this.synthIDDetector.analyzeImage(imageToAnalyze);
       aiRiskFlag = analysis.isAIGenerated;
       aiRiskScore = analysis.riskScore;
       aiRiskReason = analysis.reason;
