@@ -26,7 +26,7 @@ export class UpdateUserStatusUseCase {
       throw new Error("No tienes permiso para cambiar el estado de un usuario");
     }
 
-    if (requesterUid === uid && (status === "inactive" || status === "banned")) {
+    if (requesterUid === uid && (status === "inactive" || status === "banned" || status === "rejected")) {
       throw new Error("No puedes desactivar o suspender tu propia cuenta de administrador");
     }
 
@@ -47,7 +47,7 @@ export class UpdateUserStatusUseCase {
     await this.userRepo.update(uid, user);
 
     // Sincronizar estado en Firebase Auth y revocar sesiones activas
-    if (status === "inactive" || status === "banned") {
+    if (status === "inactive" || status === "banned" || status === "rejected") {
       await this.authService?.setUserDisabled?.(uid, true);
       await this.authService?.revokeRefreshTokens?.(uid);
     } else if (status === "active") {

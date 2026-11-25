@@ -63,11 +63,11 @@ export const authenticate = async (
     const normalizedUserType = String(rawUserType).trim().toLowerCase();
     const userStatus = userData?.status || "pending";
 
-    if (!isAuthMe && (userStatus === "inactive" || userStatus === "banned")) {
+    if (!isAuthMe && (userStatus === "inactive" || userStatus === "banned" || userStatus === "rejected")) {
       res.status(403).json({
         success: false,
         code: "ACCOUNT_INACTIVE",
-        message: "Acceso denegado: su cuenta se encuentra inactiva o suspendida",
+        message: "Acceso denegado: su cuenta se encuentra inactiva, rechazada o suspendida",
       });
       return;
     }

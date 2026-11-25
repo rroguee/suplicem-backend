@@ -44,11 +44,11 @@ export const authenticateOptional = async (
     const userData = await userRepository.getByIdStrict(decodedToken.uid);
     const userStatus = userData?.status || "pending";
 
-    if (userStatus === "inactive" || userStatus === "banned") {
+    if (userStatus === "inactive" || userStatus === "banned" || userStatus === "rejected") {
       res.status(403).json({
         success: false,
         code: "ACCOUNT_INACTIVE",
-        message: "Acceso denegado: su cuenta se encuentra inactiva o suspendida",
+        message: "Acceso denegado: su cuenta se encuentra inactiva, rechazada o suspendida",
       });
       return;
     }

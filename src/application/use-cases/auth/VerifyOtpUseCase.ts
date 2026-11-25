@@ -82,9 +82,9 @@ export class VerifyOtpUseCase {
       throw new OtpError("Usuario no encontrado.", 404, "USER_NOT_FOUND");
     }
 
-    if (user.status === "inactive" || user.status === "banned") {
+    if (user.status === "inactive" || user.status === "banned" || user.status === "rejected") {
       throw new OtpError(
-        "Tu cuenta se encuentra inactiva o suspendida. Comunícate con soporte.",
+        "Tu cuenta se encuentra inactiva, rechazada o suspendida. Comunícate con soporte.",
         403,
         "ACCOUNT_INACTIVE"
       );

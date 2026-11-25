@@ -36,9 +36,9 @@ export class RequestOtpUseCase {
         );
       }
 
-      if (user.status === "inactive" || user.status === "banned") {
+      if (user.status === "inactive" || user.status === "banned" || user.status === "rejected") {
         throw new OtpError(
-          "Tu cuenta se encuentra inactiva o suspendida. Comunícate con soporte.",
+          "Tu cuenta se encuentra inactiva, rechazada o suspendida. Comunícate con soporte.",
           403,
           "ACCOUNT_INACTIVE"
         );
