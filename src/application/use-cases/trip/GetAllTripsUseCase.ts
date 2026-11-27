@@ -1,6 +1,7 @@
 import { Trip } from "../../../domain/entities/Trip";
 import { TripRepository, TripFilters } from "../../../domain/repositories/TripRepository";
 import { OrderRepository } from "../../../domain/repositories/OrderRepository";
+import { UserRepository } from "../../../domain/repositories/UserRepository";
 
 export interface TripsQueryParams {
   actorUid?: string;
@@ -38,8 +39,47 @@ function isFractionalTripNumber(tripNumber?: string): boolean {
 export class GetAllTripsUseCase {
   constructor(
     private tripRepo: TripRepository,
-    private orderRepo?: OrderRepository
+    private orderRepo?: OrderRepository,
+    private userRepo?: UserRepository
   ) {}
+
+  private async hydrateDrivers(trips: Trip[]): Promise<void> {
+    if (!this.userRepo || trips.length === 0) return;
+
+    const driverIds = [
+      ...new Set(
+        trips
+          .map((t) => t.assignedDriverId || t.driverId)
+          .filter((id): id is string => Boolean(id && typeof id === "string" && id.trim() !== ""))
+      ),
+    ];
+
+    if (driverIds.length === 0) return;
+
+    const drivers = await Promise.all(
+      driverIds.map((id) => this.userRepo!.getById(id).catch(() => null))
+    );
+
+    const driverMap = new Map<string, any>();
+    drivers.forEach((d) => {
+      if (d && d.uid) {
+        driverMap.set(d.uid, d);
+      }
+    });
+
+    trips.forEach((trip) => {
+      const dId = trip.assignedDriverId || trip.driverId;
+      if (dId && driverMap.has(dId)) {
+        const d = driverMap.get(dId);
+        trip.driver = {
+          uid: d.uid,
+          names: d.names,
+          lastNames: d.lastNames,
+          phone: d.phone,
+        };
+      }
+    });
+  }
 
   async execute(
     actor?: { uid: string; userType: string },
@@ -152,8 +192,11 @@ export class GetAllTripsUseCase {
     const safePage = Math.min(page, totalPages);
     const start = (safePage - 1) * limit;
 
+    const pageTrips = filtered.slice(start, start + limit);
+    await this.hydrateDrivers(pageTrips);
+
     return {
-      trips: filtered.slice(start, start + limit),
+      trips: pageTrips,
       pagination: {
         page: safePage,
         limit,

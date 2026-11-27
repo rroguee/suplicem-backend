@@ -35,7 +35,7 @@ export class TripController {
     private getAvailableTripsUseCase = new GetAvailableTripsUseCase(tripRepo, userRepo),
     private getDriverTripHistoryUseCase = new GetDriverTripHistoryUseCase(tripRepo),
     private getDriverActualTripsUseCase = new GetDriverActualTripsUseCase(tripRepo),
-    private getAllTripsUseCase = new GetAllTripsUseCase(tripRepo, orderRepo),
+    private getAllTripsUseCase = new GetAllTripsUseCase(tripRepo, orderRepo, userRepo),
     private acceptTripUseCase = new AcceptTripUseCase(tripRepo, userRepo),
     private getTripDetailsUseCase = new GetTripDetailsUseCase(tripRepo),
     private getTripByOrderIdUseCase = new GetTripByOrderIdUseCase(tripRepo, orderRepo),
