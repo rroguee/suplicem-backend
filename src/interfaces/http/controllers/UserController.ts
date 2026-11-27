@@ -66,7 +66,12 @@ export class UserController {
       await updateUserUseCase.execute(req.body, authUser);
       res.status(200).json({ success: true, message: "Usuario actualizado correctamente" });
     } catch (error: any) {
-      const status = error.message?.includes("No tienes permiso") ? 403 : 400;
+      console.error("[UserController.updateUser] Error:", error.message || error);
+      const isForbidden =
+        error.statusCode === 403 ||
+        error.message?.includes("No tienes permiso") ||
+        error.message?.includes("Acceso denegado");
+      const status = isForbidden ? 403 : error.statusCode || 400;
       res.status(status).json({ success: false, message: error.message });
     }
   }

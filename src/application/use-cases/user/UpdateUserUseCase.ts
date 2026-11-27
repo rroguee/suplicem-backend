@@ -39,16 +39,25 @@ export class UpdateUserUseCase {
     if (userToUpdate.names !== undefined) sanitizedUpdate.names = userToUpdate.names;
     if (userToUpdate.lastNames !== undefined) sanitizedUpdate.lastNames = userToUpdate.lastNames;
     if (userToUpdate.phone !== undefined) {
-      const normalizedPhone = normalizeDominicanPhone(userToUpdate.phone);
-      if (normalizedPhone !== existingUser.phone) {
-        const existingByPhone = await this.userRepo.getByPhone(normalizedPhone);
-        if (existingByPhone && existingByPhone.uid !== existingUser.uid) {
-          throw new Error("El número de teléfono ya se encuentra registrado por otro usuario");
+      const trimmedPhone = userToUpdate.phone.trim();
+      if (trimmedPhone.length > 0) {
+        const normalizedPhone = normalizeDominicanPhone(trimmedPhone);
+        if (normalizedPhone !== existingUser.phone) {
+          const existingByPhone = await this.userRepo.getByPhone(normalizedPhone);
+          if (existingByPhone && existingByPhone.uid !== existingUser.uid) {
+            throw new Error("El número de teléfono ya se encuentra registrado por otro usuario");
+          }
         }
+        sanitizedUpdate.phone = normalizedPhone;
+      } else {
+        sanitizedUpdate.phone = "";
       }
-      sanitizedUpdate.phone = normalizedPhone;
     }
-    if (userToUpdate.addresses !== undefined) sanitizedUpdate.addresses = userToUpdate.addresses;
+    if (userToUpdate.addresses !== undefined) {
+      sanitizedUpdate.addresses = (userToUpdate.addresses || []).filter(
+        (addr) => addr && typeof addr.description === "string" && addr.description.trim().length > 0
+      );
+    }
     if (userToUpdate.vehicle !== undefined) sanitizedUpdate.vehicle = userToUpdate.vehicle;
     if (userToUpdate.identificationImage !== undefined) {
       sanitizedUpdate.identificationImage = userToUpdate.identificationImage;

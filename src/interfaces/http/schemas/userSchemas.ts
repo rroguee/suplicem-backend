@@ -88,7 +88,16 @@ export const UpdateUserSchema = z.object({
   names: z.string().optional(),
   lastNames: z.string().optional(),
   phone: z.string().optional(),
-  addresses: z.array(AddressSchema).optional(),
+  addresses: z.preprocess((val) => {
+    if (!Array.isArray(val)) return val;
+    return val.filter(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        typeof (item as any).description === "string" &&
+        (item as any).description.trim().length > 0
+    );
+  }, z.array(AddressSchema).optional()),
   vehicle: VehicleSchema.optional(),
   identificationImage: z.string().optional(),
   sellerId: z.string().nullable().optional(),
